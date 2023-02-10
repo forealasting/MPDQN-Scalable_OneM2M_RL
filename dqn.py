@@ -14,6 +14,7 @@ import random
 import statistics
 import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple
+from IPython.display import clear_output
 
 # request rate r
 r = 50      # if not use_tm
