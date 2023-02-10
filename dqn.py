@@ -39,7 +39,7 @@ RFID = 0  # choose random number for data
 
 
 ## Learning parameter
-# S ={k, u , c}
+# S ={k, u , c, r}
 # k (replica): 1 ~ 3                          actual value : same
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
@@ -52,6 +52,12 @@ gamma = 0.9                 # Discounting rate
 max_epsilon = 1
 min_epsilon = 0.1
 epsilon_decay = 1/300
+memory_size = 100
+batch_size = 32
+target_update = 100
+
+
+
 
 ## 7/8 stage
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
@@ -366,7 +372,7 @@ class DQNAgent:
         self.optimizer.step()
         return loss.item()
 
-    def train(self, num_frames: int, plotting_interval: int = 200):
+    def train(self, episodes: int, plotting_interval: int = 200):
         """Train the agent."""
         self.is_test = False
 
@@ -377,7 +383,7 @@ class DQNAgent:
         scores = []
         score = 0
 
-        for frame_idx in range(1, num_frames + 1):
+        for frame_idx in range(1, episodes + 1):
             action = self.select_action(state)
             next_state, reward, done = self.step(action)
 
@@ -604,49 +610,12 @@ def store_reward(service_name, reward):
     f.write(data)
 
 
-def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, service_name):
+def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, service_name):
     global timestamp, simulation_time, change, RFID, send_finish
 
     env = Env(service_name)
-    actions = list(range(env.n_actions))
-    RL = QLearningTable(actions, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay)
-    all_rewards = []
-    step = 0
-    init_state = [1, 0.0, 0.5]
-
-    for episode in range(total_episodes):
-        # initial observation
-        state = init_state
-        rewards = []  # record reward every episode
-        while True:
-            if ((timestamp - 1) % 30) == 0:
-                print(service_name, "step: ", step, "---------------")
-                # RL choose action based on state
-                action = RL.choose_action(state)
-                print("action: ", action)
-                # change = 1
-                # RL take action and get next state and reward
-                next_state, reward, done = env.step(action)
-
-                if timestamp == (simulation_time-1):
-                    done = True
-
-                print("next_state: ", next_state, "reward: ", reward)
-                rewards.append(reward)
-                # RL learn from this transition
-                RL.learn(state, action, reward, next_state, done)
-
-                # swap state
-                state = next_state
-                step += 1
-                if done:
-                    avg_rewards = sum(rewards)/len(rewards)
-                    break
-
-        all_rewards.append(avg_rewards)
-    # episode end
-    print("service:", service_name, all_rewards)
-    store_reward(service_name, all_rewards)
+    agent = DQNAgent(env, memory_size, batch_size, target_update, epsilon_decay)
+    agent.train(total_episodes)
 
 
 start_time = time.time()
@@ -654,8 +623,8 @@ start_time = time.time()
 t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
-t4 = threading.Thread(target=q_learning, args=(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, 'app_mn1', ))
-t5 = threading.Thread(target=q_learning, args=(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, 'app_mn2', ))
+t4 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, 'app_mn1', ))
+t5 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, 'app_mn2', ))
 
 
 t1.start()
