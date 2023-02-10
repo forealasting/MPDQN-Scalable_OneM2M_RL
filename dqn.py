@@ -1,3 +1,9 @@
+#  troch
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+
 import requests
 import time
 import threading
@@ -204,6 +210,7 @@ class Env:
         next_state.append(self.replica)
         next_state.append(u/10)
         next_state.append(self.cpus)
+        next_state = np.ndarray(next_state)
         # state.append(req)
         done = False
         w_pref = 0.5
@@ -259,11 +266,11 @@ class Network(nn.Module):
         super(Network, self).__init__()
 
         self.layers = nn.Sequential(
-            nn.Linear(in_dim, 128),
+            nn.Linear(in_dim, 64),
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(128, out_dim)
+            nn.Linear(64, out_dim)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -340,10 +347,8 @@ class DQNAgent:
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, np.float64, bool]:
         """Take an action and return the response of the env."""
         # next_state, reward, done, _ = self.env.step(action)
-        next_state, c_perf, c_res, done = self.env.step(action)
-        w_pref = 0.5
-        w_res = 0.5
-        reward = -(w_pref * c_perf + w_res * c_res)
+        next_state, reward, done = self.env.step(action)
+
         if not self.is_test:
             self.transition += [reward, next_state, done]
             self.memory.store(*self.transition)
