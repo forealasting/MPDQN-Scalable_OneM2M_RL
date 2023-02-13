@@ -89,8 +89,8 @@ class Env:
         self.action_space = ['-r', '-1', '0', '1', 'r']
         self.n_actions = len(self.action_space)
 
-        # Need modify if ip change
-        self.url_list = ["http://192.168.99.115:666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4", "http://192.168.99.116:777/~/mn-cse/mn-name/AE2/Control_Command_Container", "http://192.168.99.115:1111/test", "http://192.168.99.116:2222/test"]
+        # Need modify ip if ip change
+        self.url_list = ["http://192.168.99.121:666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4", "http://192.168.99.122:777/~/mn-cse/mn-name/AE2/Control_Command_Container", "http://192.168.99.121:1111/test", "http://192.168.99.122:2222/test"]
 
 
     def reset(self):
@@ -143,6 +143,7 @@ class Env:
 
             return last_cpu
         except:
+            print("self.service_name:: ",self.service_name)
             print('cant open')
 
     def discretize_cpu_value(self, value):
@@ -181,8 +182,8 @@ class Env:
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        time.sleep(30)
-        # change = 0
+        time.sleep(40)
+        event.set()
         response_time_list = []
         for i in range(5):
             time.sleep(3)
@@ -198,7 +199,7 @@ class Env:
         if self.service_name == "app_mn1":
             t_max = 25
         elif self.service_name == "app_mn2":
-            t_max = 15
+            t_max = 20
         else:
             t_max = 5
 
@@ -217,7 +218,6 @@ class Env:
         next_state.append(self.replica)
         next_state.append(u/10)
         next_state.append(self.cpus)
-        next_state = np.ndarray(next_state)
         # state.append(req)
         done = False
         w_pref = 0.5

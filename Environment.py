@@ -2,7 +2,7 @@ import statistics
 import subprocess
 import time
 import requests
-
+import threading
 # service_name_list = ["app_mn1", "app_mn2", "app_mnae1", "app_mnae2"]
 service_name_list = ["app_mn1", "app_mn2"]
 # Kmax = 3  #  max number of replicas
@@ -11,7 +11,7 @@ service_name_list = ["app_mn1", "app_mn2"]
 RFID = 0
 timestamp = 0  # timestamp
 # send_finish = 0
-
+event = threading.Event()
 
 class Env:
 
@@ -23,7 +23,9 @@ class Env:
         self.cpu_utilization = 0.0
         self.action_space = ['-r', '-1', '0', '1', 'r']
         self.n_actions = len(self.action_space)
-        self.url_list = ["http://192.168.99.111:666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4", "http://192.168.99.112:777/~/mn-cse/mn-name/AE2/Control_Command_Container", "http://192.168.99.111:1111/test", "http://192.168.99.112:2222/test"]
+
+        # Need modify ip if ip change
+        self.url_list = ["http://192.168.99.121:666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4", "http://192.168.99.122:777/~/mn-cse/mn-name/AE2/Control_Command_Container", "http://192.168.99.121:1111/test", "http://192.168.99.122:2222/test"]
 
 
     def reset(self):
@@ -34,11 +36,11 @@ class Env:
         time.sleep(60)
 
     def get_response_time(self):
-        global timestamp, RFID
-        path1 = self.service_name + "_response.txt"
+        global RFID
+        path1 = "result/" + self.service_name + "_response.txt"
 
         f1 = open(path1, 'a')
-        print(RFID)
+
         headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
         data = {
             "m2m:cin": {
@@ -55,7 +57,7 @@ class Env:
         response = requests.post(url, headers=headers, json=data)
         end = time.time()
         response_time = end - start
-        data1 = str(timestamp) + ' ' + str(response_time) + '\n'
+        data1 = str(timestamp) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
         f1.write(data1)
         f1.close()
         return response_time
@@ -66,18 +68,17 @@ class Env:
             f = open(path, "r")
             cpu = []
             time = []
-            resource_use = []
             for line in f:
                 s = line.split(' ')
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
-                resource_use.append(float(s[-1]))
 
             last_cpu = cpu[-1]
             f.close()
 
             return last_cpu
         except:
+            print("self.service_name:: ",self.service_name)
             print('cant open')
 
     def discretize_cpu_value(self, value):
@@ -89,30 +90,35 @@ class Env:
         if action == '-r':
             if self.replica > 1:
                 self.replica -= 1
+                change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
-                change = 1
+
         if action == '-1':
             if self.cpus >= 0.5:
                 self.cpus -= 0.1
                 self.cpus = round(self.cpus, 1)  # ex error:  0.7999999999999999
+                change = 1
                 cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
                 returned_text = subprocess.check_output(cmd, shell=True)
-                change = 1
+
         if action == '1':
             if self.cpus < 1:
                 self.cpus += 0.1
                 self.cpus = round(self.cpus, 1)
+                change = 1
                 cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
                 returned_text = subprocess.check_output(cmd, shell=True)
-                change = 1
+
         if action == 'r':
             if self.replica < 3:
                 self.replica += 1
+                change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
-                change = 1
-        time.sleep(30)
+
+        time.sleep(40)
+        event.set()
         response_time_list = []
         for i in range(5):
             time.sleep(3)
@@ -120,7 +126,7 @@ class Env:
 
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         median_response_time = statistics.median(response_time_list)
-        avg_response_time = median_response_time * 1000  # 0.05s -> 50ms
+        median_response_time = median_response_time*1000  # 0.05s -> 50ms
         if median_response_time >= 50:
             Rt = 50
         else:
@@ -128,7 +134,7 @@ class Env:
         if self.service_name == "app_mn1":
             t_max = 25
         elif self.service_name == "app_mn2":
-            t_max = 15
+            t_max = 20
         else:
             t_max = 5
 
@@ -139,10 +145,9 @@ class Env:
             tmp_n = 1.4 ** (Rt / t_max)
             c_perf = tmp_n / tmp_d
 
-
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
-        # 𝑘, 𝑢, 𝑐   # 𝑟
+        # k, u, c # r
         self.cpu_utilization = self.get_cpu_utilization()
         u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)

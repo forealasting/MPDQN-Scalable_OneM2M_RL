@@ -6,6 +6,7 @@ import json
 import numpy as np
 import random
 import statistics
+import copy
 
 # request rate r
 r = 50      # if not use_tm
@@ -21,7 +22,7 @@ replicas = 1  # initial replica
 
 ## initial
 request_num = []
-simulation_time = 3  # 300 s  # or 3600s
+simulation_time = 3600  # 300 s  # or 3600s
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
 reset_complete = 0
@@ -51,7 +52,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
 
 if use_tm:
     #   Modify the workload path if it is different
-    f = open('/home/user/flask_test/client/request/request10.txt')
+    f = open('/home/user/one_m2m_service/client/request/request6.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -75,8 +76,8 @@ class Env:
         self.action_space = ['-r', '-1', '0', '1', 'r']
         self.n_actions = len(self.action_space)
 
-        # Need modify if ip change
-        self.url_list = ["http://192.168.99.115:666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4", "http://192.168.99.116:777/~/mn-cse/mn-name/AE2/Control_Command_Container", "http://192.168.99.115:1111/test", "http://192.168.99.116:2222/test"]
+        # Need modify ip if ip change
+        self.url_list = ["http://192.168.99.121:666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4", "http://192.168.99.122:777/~/mn-cse/mn-name/AE2/Control_Command_Container", "http://192.168.99.121:1111/test", "http://192.168.99.122:2222/test"]
 
 
     def reset(self):
@@ -168,7 +169,7 @@ class Env:
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        time.sleep(30)
+        time.sleep(40)
         event.set()
         response_time_list = []
         for i in range(5):
@@ -227,7 +228,7 @@ class QLearningTable:
 
     def choose_action(self, state):
         available_actions = self.get_available_actions(state)
-        s = list(state)
+        s = copy.deepcopy(state)
         s[2] = int(s[2] * 10 - 1)
         s[1] = int(s[1])
         s[0] = int(s[0])-1
@@ -245,8 +246,8 @@ class QLearningTable:
         return action
 
     def learn(self, state, a, r, next_state, done):
-        s = list(state)
-        s_ = list(next_state)
+        s = copy.deepcopy(state)
+        s_ = copy.deepcopy(next_state)
         # state  = [1, 0.0, 0.5]
         # transform state to index
         s[2] = int(s[2] * 10 - 1)
@@ -354,23 +355,22 @@ def send_request(stage,request_num, start_time, total_episodes):
         send_finish = 0
         timestamp = 0
         for i in request_num:
-            print("timestamp: ", timestamp)
+            # print("timestamp: ", timestamp)
             exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
             # if change == 1:
             if ((timestamp - 1) % 30) == 0:
-                print("timestamp: ", timestamp)
-                # print('change!')
+                print('change!')
                 event.wait()
                 # time.sleep(30)
                 change = 0
             for j in range(i):
                 try:
                     s_time = time.time()
-                    # Need modify if ip change
-                    url = "http://192.168.99.115:666/~/mn-cse/mn-name/AE1/"
+                    # Need modify ip if ip change
+                    url = "http://192.168.99.121:666/~/mn-cse/mn-name/AE1/"
                     # change stage
-                    url1 = url + stage[(i * 10 + j) % 8]
+                    url1 = url + stage[(tmp_count * 10 + j) % 8]
                     if error_rate > random.random():
                         content = "false"
                     else:
@@ -410,14 +410,17 @@ def store_error_count(error):
 
 # reset Environment
 def reset():
-    cmd = "sudo docker-machine ssh default docker stack rm app"
+    cmd = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn1"
     subprocess.check_output(cmd, shell=True)
-    cmd1 = "sudo docker-machine ssh default docker stack deploy --compose-file docker-compose.yml app"
+    cmd1 = "sudo docker-machine ssh default docker service scale app_mn1=1"
+    subprocess.check_output(cmd1, shell=True)
+    cmd = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn2"
+    subprocess.check_output(cmd, shell=True)
+    cmd1 = "sudo docker-machine ssh default docker service scale app_mn2=1"
     subprocess.check_output(cmd1, shell=True)
 
 
 def store_reward(service_name, reward):
-
     # Write the string to a text file
     path = "result/" + service_name + "_reward.txt"
     f = open(path, 'a')
@@ -448,7 +451,7 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
         rewards = []  # record reward every episode
         while True:
             if ((timestamp - 1) % 30) == 0:
-                # print("timestamp: ", timestamp)
+                print("timestamp: ", timestamp)
                 print(service_name, "step: ", step)
                 # RL choose action based on state
                 action = RL.choose_action(state)
@@ -483,7 +486,6 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
     print("service:", service_name, all_rewards)
 
 
-
 start_time = time.time()
 
 t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
@@ -497,12 +499,12 @@ t1.start()
 t2.start()
 t3.start()
 t4.start()
-#t5.start()
+t5.start()
 
 
 t1.join()
 t2.join()
 t3.join()
 t4.join()
-#t5.join()
+t5.join()
 
