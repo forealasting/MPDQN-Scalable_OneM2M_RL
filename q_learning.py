@@ -21,14 +21,14 @@ replicas = 1  # initial replica
 
 ## initial
 request_num = []
-simulation_time = 3600  # 300 s  # or 3600s
+simulation_time = 3  # 300 s  # or 3600s
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
 reset_complete = 0
 send_finish = 0
 timestamp = 0  # plus 1 in funcntion : send_request
 RFID = 0  # choose random number for data
-
+event = threading.Event()
 
 ## Learning parameter
 # S ={k, u , c}
@@ -51,7 +51,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
 
 if use_tm:
     #   Modify the workload path if it is different
-    f = open('/home/user/flask_test/client/request/request6.txt')
+    f = open('/home/user/flask_test/client/request/request10.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -169,7 +169,7 @@ class Env:
                 returned_text = subprocess.check_output(cmd, shell=True)
 
         time.sleep(30)
-        # change = 0
+        event.set()
         response_time_list = []
         for i in range(5):
             time.sleep(3)
@@ -344,8 +344,12 @@ def send_request(stage,request_num, start_time, total_episodes):
     global timestamp, use_tm, RFID
     error = 0
     for episode in range(total_episodes):
+        print("episode: ", episode)
         print("reset envronment")
+        reset_complete = 0
         reset()  # reset Environment
+        time.sleep(70)
+        print("reset envronment complete")
         reset_complete = 1
         send_finish = 0
         timestamp = 0
@@ -353,36 +357,35 @@ def send_request(stage,request_num, start_time, total_episodes):
             print("timestamp: ", timestamp)
             exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
-            if change == 1:
-                print('change!')
-                time.sleep(30)
+            # if change == 1:
+            if ((timestamp - 1) % 30) == 0:
+                print("timestamp: ", timestamp)
+                # print('change!')
+                event.wait()
+                # time.sleep(30)
                 change = 0
             for j in range(i):
-                max_retries = 5
-                retries = 0
-                while retries < max_retries:
-                    try:
-                        s_time = time.time()
-                        # Need modify if ip change
-                        url = "http://192.168.99.115:666/~/mn-cse/mn-name/AE1/"
-                        # change stage
-                        url1 = url + stage[(i * 10 + j) % 8]
-                        if error_rate > random.random():
-                            content = "false"
-                        else:
-                            content = "true"
-                        response = post_url(url1, RFID, content)
-                        # print(response)
-                        t_time = time.time()
-                        rt = t_time - s_time
-                        # store_rt(timestamp, rt)
-                        RFID += 1
-                        break
+                try:
+                    s_time = time.time()
+                    # Need modify if ip change
+                    url = "http://192.168.99.115:666/~/mn-cse/mn-name/AE1/"
+                    # change stage
+                    url1 = url + stage[(i * 10 + j) % 8]
+                    if error_rate > random.random():
+                        content = "false"
+                    else:
+                        content = "true"
+                    response = post_url(url1, RFID, content)
+                    # print(response)
+                    t_time = time.time()
+                    rt = t_time - s_time
+                    # store_rt(timestamp, rt)
+                    RFID += 1
+                    break
 
-                    except:
-                        error += 1
-                        retries += 1
-                        # time.sleep(2)
+                except:
+                    error += 1
+                    # time.sleep(2)
 
                 if use_tm == 1:
                     time.sleep(exp[tmp_count])
@@ -394,8 +397,16 @@ def send_request(stage,request_num, start_time, total_episodes):
     send_finish = 1
     final_time = time.time()
     alltime = final_time - start_time
+    store_error_count(error)
     print('time:: ', alltime)
 
+
+def store_error_count(error):
+    # Write the string to a text file
+    path = "result/error.txt"
+    f = open(path, 'a')
+    data = str(error) + '\n'
+    f.write(data)
 
 # reset Environment
 def reset():
@@ -403,16 +414,21 @@ def reset():
     subprocess.check_output(cmd, shell=True)
     cmd1 = "sudo docker-machine ssh default docker stack deploy --compose-file docker-compose.yml app"
     subprocess.check_output(cmd1, shell=True)
-    time.sleep(70)
 
 
 def store_reward(service_name, reward):
-    # Convert the list to a string
-    data = '\n'.join(str(x) for x in reward)
 
     # Write the string to a text file
-    path = service_name + "reward.txt"
+    path = "result/" + service_name + "_reward.txt"
     f = open(path, 'a')
+    data = str(reward) + '\n'
+    f.write(data)
+
+
+def store_trajectory(service_name, step, s, a, r, s_):
+    path = "result/" + service_name + "_trajectory.txt"
+    f = open(path, 'a')
+    data = str(step) + ' ' + str(s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(s_) + '\n'
     f.write(data)
 
 
@@ -432,18 +448,24 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
         rewards = []  # record reward every episode
         while True:
             if ((timestamp - 1) % 30) == 0:
-                print(service_name, "step: ", step, "---------------")
+                # print("timestamp: ", timestamp)
+                print(service_name, "step: ", step)
                 # RL choose action based on state
                 action = RL.choose_action(state)
-                print("action: ", action, "\n")
+                print("action: ", action)
                 # change = 1
                 # RL take action and get next state and reward
-                next_state, reward, done = env.step(action)
 
+                s_t = time.time()
+                next_state, reward, done = env.step(action)
+                e_t = time.time() - s_t
+                print("Env step execution time: ", e_t)
                 if timestamp == (simulation_time-1):
                     done = True
 
-                print("next_state: ", next_state, "reward: ", reward, "\n")
+                print("next_state: ", next_state, "reward: ", reward)
+                print("done: ", done)
+                store_trajectory(service_name, step, state, action, reward, next_state)
                 rewards.append(reward)
                 # RL learn from this transition
                 RL.learn(state, action, reward, next_state, done)
@@ -475,12 +497,12 @@ t1.start()
 t2.start()
 t3.start()
 t4.start()
-t5.start()
+#t5.start()
 
 
 t1.join()
 t2.join()
 t3.join()
 t4.join()
-t5.join()
+#t5.join()
 
