@@ -29,7 +29,9 @@ reset_complete = 0
 send_finish = 0
 timestamp = 0  # plus 1 in funcntion : send_request
 RFID = 0  # choose random number for data
-event = threading.Event()
+event_mn1 = threading.Event()
+event_mn2 = threading.Event()
+
 
 ## Learning parameter
 # S ={k, u , c}
@@ -170,7 +172,8 @@ class Env:
                 returned_text = subprocess.check_output(cmd, shell=True)
 
         time.sleep(30)
-        event.set()
+        event_mn1.set()
+        event_mn2.set()
         response_time_list = []
         for i in range(5):
             time.sleep(3)
@@ -361,7 +364,8 @@ def send_request(stage,request_num, start_time, total_episodes):
             # if change == 1:
             if ((timestamp - 1) % 30) == 0:
                 print('change!')
-                event.wait()
+                event_mn1.wait()
+                event_mn2.wait()
                 # time.sleep(30)
                 change = 0
             for j in range(i):

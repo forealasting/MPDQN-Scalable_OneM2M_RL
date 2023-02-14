@@ -31,7 +31,7 @@ event = threading.Event()
 
 ## initial
 request_num = []
-simulation_time = 3600  # 300 s  # or 3600s
+simulation_time = 3601  # 300 s  # or 3600s
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
 reset_complete = 0
