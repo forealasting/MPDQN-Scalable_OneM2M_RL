@@ -27,6 +27,7 @@ T_min = 0.055
 set_tmin = 1  # 1 if setting tmin
 cpus = 0.5  # initial cpus
 replicas = 1  # initial replica
+event = threading.Event()
 
 ## initial
 request_num = []

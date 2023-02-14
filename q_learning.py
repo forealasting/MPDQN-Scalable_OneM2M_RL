@@ -22,7 +22,7 @@ replicas = 1  # initial replica
 
 ## initial
 request_num = []
-simulation_time = 3600  # 300 s  # or 3600s
+simulation_time = 3601  # 300 s  # or 3600s
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
 reset_complete = 0
@@ -37,9 +37,9 @@ event = threading.Event()
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 5       # Total episodes
+total_episodes = 5            # Total episodes
 learning_rate = 0.01          # Learning rate
-# max_steps = 50               # Max steps per episode
+# max_steps = 50              # Max steps per episode
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
@@ -125,10 +125,10 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_cpu = cpu[-1]
+            last_avg_cpu = sum(cpu[-3:])/len(cpu[-3:])
             f.close()
 
-            return last_cpu
+            return last_avg_cpu
         except:
             print("self.service_name:: ",self.service_name)
             print('cant open')
@@ -169,7 +169,7 @@ class Env:
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        time.sleep(40)
+        time.sleep(30)
         event.set()
         response_time_list = []
         for i in range(5):
@@ -313,21 +313,21 @@ def store_cpu(start_time, woker_name):
 
     cmd = "sudo docker-machine ssh " + woker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
     while True:
-        if reset_complete:  # time.sleep(70)  # wait environment start
-            if send_finish == 1:
-                break
-            if change == 0:
-                returned_text = subprocess.check_output(cmd, shell=True)
-                my_data = returned_text.decode('utf8')
-                # print(my_data.find("CPUPerc"))
-                my_data = my_data.split("}")
-                # state_u = []
-                for i in range(len(my_data) - 1):
-                    # print(my_data[i]+"}")
-                    my_json = json.loads(my_data[i] + "}")
-                    name = my_json['Name'].split(".")[0]
-                    cpu = my_json['CPUPerc'].split("%")[0]
-                    # state_u.append(cpu)
+
+        if send_finish == 1:
+            break
+        if change == 0 and reset_complete == 1:
+            returned_text = subprocess.check_output(cmd, shell=True)
+            my_data = returned_text.decode('utf8')
+            # print(my_data.find("CPUPerc"))
+            my_data = my_data.split("}")
+            # state_u = []
+            for i in range(len(my_data) - 1):
+                # print(my_data[i]+"}")
+                my_json = json.loads(my_data[i] + "}")
+                name = my_json['Name'].split(".")[0]
+                cpu = my_json['CPUPerc'].split("%")[0]
+                if float(cpu) > 0:
                     final_time = time.time()
                     t = final_time - start_time
                     path = "result/" + name + "_cpu.txt"
@@ -355,7 +355,7 @@ def send_request(stage,request_num, start_time, total_episodes):
         send_finish = 0
         timestamp = 0
         for i in request_num:
-            # print("timestamp: ", timestamp)
+            print("timestamp: ", timestamp)
             exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
             # if change == 1:
@@ -381,7 +381,6 @@ def send_request(stage,request_num, start_time, total_episodes):
                     rt = t_time - s_time
                     # store_rt(timestamp, rt)
                     RFID += 1
-                    break
 
                 except:
                     error += 1
@@ -393,6 +392,7 @@ def send_request(stage,request_num, start_time, total_episodes):
 
                 else:
                     time.sleep(1/i)  # send requests every 1s
+
             timestamp += 1
     send_finish = 1
     final_time = time.time()
@@ -407,6 +407,7 @@ def store_error_count(error):
     f = open(path, 'a')
     data = str(error) + '\n'
     f.write(data)
+
 
 # reset Environment
 def reset():
@@ -451,7 +452,7 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
         rewards = []  # record reward every episode
         while True:
             if ((timestamp - 1) % 30) == 0:
-                print("timestamp: ", timestamp)
+                # print("timestamp: ", timestamp)
                 print(service_name, "step: ", step)
                 # RL choose action based on state
                 action = RL.choose_action(state)
