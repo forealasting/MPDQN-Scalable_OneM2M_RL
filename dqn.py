@@ -18,27 +18,37 @@ from IPython.display import clear_output
 
 # request rate r
 r = 50      # if not use_tm
-use_tm = 1  # if use_tm
-error_rate = 0.2  # 0.2/0.5
+use_tm = 0  # if use_tm
+
 
 # initial setting (threshold setting) # no use now
-T_max = 0.065  # t_max violation
-T_min = 0.055
+# T_max = 0.065  # t_max violation
+# T_min = 0.055
 set_tmin = 1  # 1 if setting tmin
-cpus = 0.5  # initial cpus
-replicas = 1  # initial replica
+# cpus = 0.5  # initial cpus
+# replicas = 1  # initial replica
 event = threading.Event()
 
 ## initial
 request_num = []
-simulation_time = 3601  # 300 s  # or 3600s
+# timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
+# learning step:          0,  ..., 1,     , 120
+#
+simulation_time = 32  # 300 s  # 0 ~ 3601:  3600
 request_n = simulation_time
+
+## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
 reset_complete = 0
 send_finish = 0
 timestamp = 0  # plus 1 in funcntion : send_request
-RFID = 0  # choose random number for data
-
+RFID = 0  # random number for data
+event_mn1 = threading.Event()
+event_mn2 = threading.Event()
+# Need modify ip if ip change
+ip = "192.168.99.121"  # app_mn1
+ip1 = "192.168.99.122"  # app_mn2
+error_rate = 0.2  # 0.2/0.5
 
 ## Learning parameter
 # S ={k, u , c, r}
@@ -223,8 +233,9 @@ class Env:
         done = False
         w_pref = 0.5
         w_res = 0.5
+        # cost function
         reward = -(w_pref * c_perf + w_res * c_res)
-        # print("step_over_next_state: ", next_state)
+
         return next_state, reward, done
 
 
@@ -296,7 +307,7 @@ class DQNAgent:
             epsilon_decay: float,
             max_epsilon: float = 1.0,
             min_epsilon: float = 0.1,
-            gamma: float = 0.99,
+            gamma: float = 0.9,
     ):
 
         # obs_dim = env.observation_space.shape[0]

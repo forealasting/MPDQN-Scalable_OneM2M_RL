@@ -12,6 +12,9 @@ RFID = 0
 timestamp = 0  # timestamp
 # send_finish = 0
 event = threading.Event()
+# Need modify ip if ip change
+ip = "192.168.99.121"
+ip1 = "192.168.99.122"
 
 class Env:
 
@@ -25,8 +28,9 @@ class Env:
         self.n_actions = len(self.action_space)
 
         # Need modify ip if ip change
-        self.url_list = ["http://192.168.99.121:666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4", "http://192.168.99.122:777/~/mn-cse/mn-name/AE2/Control_Command_Container", "http://192.168.99.121:1111/test", "http://192.168.99.122:2222/test"]
-
+        self.url_list = url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
+                                    "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container",
+                                    "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
     def reset(self):
         cmd = "sudo docker-machine ssh default docker stack rm app"
@@ -47,7 +51,7 @@ class Env:
                 "con": "true",
                 "cnf": "application/json",
                 "lbl": "req",
-                "rn": str(RFID + 10000),
+                "rn": str(RFID + 1000),
             }
         }
         # URL
@@ -73,19 +77,20 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_cpu = cpu[-1]
+            last_avg_cpu = sum(cpu[-3:])/len(cpu[-3:])
             f.close()
 
-            return last_cpu
+            return last_avg_cpu
         except:
-            print("self.service_name:: ",self.service_name)
+            print("self.service_name:: ", self.service_name)
             print('cant open')
 
     def discretize_cpu_value(self, value):
         return int(round(value / 10))
 
-    def step(self, action_index):
-        global timestamp, send_finish, RFID, change
+    def step(self, action_index, event, done):
+        global timestamp, send_finish, RFID, change, simulation_time
+
         action = self.action_space[action_index]
         if action == '-r':
             if self.replica > 1:
@@ -117,13 +122,16 @@ class Env:
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        time.sleep(40)
-        event.set()
+        time.sleep(30)
+        if not done:
+            event.set()
+        print(self.service_name, "_done:: ", done)
         response_time_list = []
         for i in range(5):
             time.sleep(3)
             response_time_list.append(self.get_response_time())
 
+        event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         median_response_time = statistics.median(response_time_list)
         median_response_time = median_response_time*1000  # 0.05s -> 50ms
@@ -154,10 +162,9 @@ class Env:
         next_state.append(u/10)
         next_state.append(self.cpus)
         # state.append(req)
-        done = False
         w_pref = 0.5
         w_res = 0.5
         reward = -(w_pref * c_perf + w_res * c_res)
         # print("step_over_next_state: ", next_state)
-        return next_state, reward, done
+        return next_state, reward
 

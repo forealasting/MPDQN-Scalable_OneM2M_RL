@@ -11,26 +11,35 @@ import copy
 # request rate r
 r = 50      # if not use_tm
 use_tm = 1  # if use_tm
-error_rate = 0.2  # 0.2/0.5
 
 # initial setting (threshold setting) # no use now
-T_max = 0.065  # t_max violation
-T_min = 0.055
-set_tmin = 1  # 1 if setting tmin
-cpus = 0.5  # initial cpus
-replicas = 1  # initial replica
+# T_max = 0.065  # t_max violation
+# T_min = 0.055
+# set_tmin = 1  # 1 if setting tmin
+# cpus = 0.5  # initial cpus
+# replicas = 1  # initial replica
 
 ## initial
 request_num = []
-simulation_time = 3601  # 300 s  # or 3600s
+# timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
+# learning step:          0,  ..., 1,     , 120
+
+simulation_time = 3602  # 300 s  # 0 ~ 3601:  3600
 request_n = simulation_time
+
+
+## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
 reset_complete = 0
 send_finish = 0
 timestamp = 0  # plus 1 in funcntion : send_request
-RFID = 0  # choose random number for data
+RFID = 0  # random number for post request data name
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
+# Need modify ip if ip change
+ip = "192.168.99.121"  # app_mn1
+ip1 = "192.168.99.122"  # app_mn2
+error_rate = 0.2  # 0.2/0.5
 
 
 ## Learning parameter
@@ -41,20 +50,20 @@ event_mn2 = threading.Event()
 # action_space = ['-r', -1, 0, 1, 'r']
 total_episodes = 5            # Total episodes
 learning_rate = 0.01          # Learning rate
-# max_steps = 50              # Max steps per episode
+# max_steps = 121              # Max steps per episode
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
 min_epsilon = 0.1
 epsilon_decay = 1/300
 
-## 7/8 stage
+## 7 stage
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
     #   Modify the workload path if it is different
-    f = open('/home/user/one_m2m_service/client/request/request6.txt')
+    f = open('request/request6.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -79,8 +88,9 @@ class Env:
         self.n_actions = len(self.action_space)
 
         # Need modify ip if ip change
-        self.url_list = ["http://192.168.99.121:666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4", "http://192.168.99.122:777/~/mn-cse/mn-name/AE2/Control_Command_Container", "http://192.168.99.121:1111/test", "http://192.168.99.122:2222/test"]
-
+        self.url_list = url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
+                                    "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container",
+                                    "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
     def reset(self):
         cmd = "sudo docker-machine ssh default docker stack rm app"
@@ -101,7 +111,7 @@ class Env:
                 "con": "true",
                 "cnf": "application/json",
                 "lbl": "req",
-                "rn": str(RFID + 10000),
+                "rn": str(RFID + 1000),
             }
         }
         # URL
@@ -132,14 +142,15 @@ class Env:
 
             return last_avg_cpu
         except:
-            print("self.service_name:: ",self.service_name)
+            print("self.service_name:: ", self.service_name)
             print('cant open')
 
     def discretize_cpu_value(self, value):
         return int(round(value / 10))
 
-    def step(self, action_index):
-        global timestamp, send_finish, RFID, change
+    def step(self, action_index, event, done):
+        global timestamp, send_finish, RFID, change, simulation_time
+
         action = self.action_space[action_index]
         if action == '-r':
             if self.replica > 1:
@@ -171,14 +182,16 @@ class Env:
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        time.sleep(30)
-        event_mn1.set()
-        event_mn2.set()
+        time.sleep(30)  # wait service start
+        if not done:
+            event.set()
+        print(self.service_name, "_done: ", done)
         response_time_list = []
         for i in range(5):
             time.sleep(3)
             response_time_list.append(self.get_response_time())
 
+        event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         median_response_time = statistics.median(response_time_list)
         median_response_time = median_response_time*1000  # 0.05s -> 50ms
@@ -209,12 +222,12 @@ class Env:
         next_state.append(u/10)
         next_state.append(self.cpus)
         # state.append(req)
-        done = False
+
+        # cost function
         w_pref = 0.5
         w_res = 0.5
         reward = -(w_pref * c_perf + w_res * c_res)
-        # print("step_over_next_state: ", next_state)
-        return next_state, reward, done
+        return next_state, reward
 
 
 class QLearningTable:
@@ -348,7 +361,7 @@ def send_request(stage,request_num, start_time, total_episodes):
     global timestamp, use_tm, RFID
     error = 0
     for episode in range(total_episodes):
-        print("episode: ", episode)
+        # print("episode: ", episode)
         print("reset envronment")
         reset_complete = 0
         reset()  # reset Environment
@@ -363,16 +376,15 @@ def send_request(stage,request_num, start_time, total_episodes):
             tmp_count = 0
             # if change == 1:
             if ((timestamp - 1) % 30) == 0:
-                print('change!')
                 event_mn1.wait()
                 event_mn2.wait()
-                # time.sleep(30)
+
                 change = 0
             for j in range(i):
                 try:
                     s_time = time.time()
                     # Need modify ip if ip change
-                    url = "http://192.168.99.121:666/~/mn-cse/mn-name/AE1/"
+                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                     # change stage
                     url1 = url + stage[(tmp_count * 10 + j) % 8]
                     if error_rate > random.random():
@@ -433,14 +445,14 @@ def store_reward(service_name, reward):
     f.write(data)
 
 
-def store_trajectory(service_name, step, s, a, r, s_):
+def store_trajectory(service_name, step, s, a, r, s_, done):
     path = "result/" + service_name + "_trajectory.txt"
     f = open(path, 'a')
-    data = str(step) + ' ' + str(s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(s_) + '\n'
+    data = str(step) + ' ' + str(s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(s_)+ ' ' + str(done) + '\n'
     f.write(data)
 
 
-def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, service_name):
+def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, event, service_name):
     global timestamp, simulation_time, change, RFID, send_finish
 
     env = Env(service_name)
@@ -454,26 +466,25 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
         # initial observation
         state = init_state
         rewards = []  # record reward every episode
+
         while True:
             if ((timestamp - 1) % 30) == 0:
-                # print("timestamp: ", timestamp)
-                print(service_name, "step: ", step)
                 # RL choose action based on state
                 action = RL.choose_action(state)
-                print("action: ", action)
-                # change = 1
+                # print(service_name, " timestamp: ", timestamp, " step: ", step, " action: ", action)
+                # print("action: ", action)
                 # RL take action and get next state and reward
-
-                s_t = time.time()
-                next_state, reward, done = env.step(action)
-                e_t = time.time() - s_t
-                print("Env step execution time: ", e_t)
+                print("timestamp: ", timestamp)
                 if timestamp == (simulation_time-1):
                     done = True
+                else:
+                    done = False
 
-                print("next_state: ", next_state, "reward: ", reward)
-                print("done: ", done)
-                store_trajectory(service_name, step, state, action, reward, next_state)
+                next_state, reward = env.step(action, event, done)
+                print(service_name, " next_state: ", next_state, " reward: ", reward, " done: ", done)
+
+
+                store_trajectory(service_name, step, state, action, reward, next_state, done)
                 rewards.append(reward)
                 # RL learn from this transition
                 RL.learn(state, action, reward, next_state, done)
@@ -496,8 +507,8 @@ start_time = time.time()
 t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
-t4 = threading.Thread(target=q_learning, args=(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, 'app_mn1', ))
-t5 = threading.Thread(target=q_learning, args=(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, 'app_mn2', ))
+t4 = threading.Thread(target=q_learning, args=(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, event_mn1, 'app_mn1', ))
+t5 = threading.Thread(target=q_learning, args=(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, event_mn2, 'app_mn2', ))
 
 
 t1.start()
