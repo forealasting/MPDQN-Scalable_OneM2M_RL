@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 
 # r = 50
-use_tm = 1
 # data_name = '_tm1'
 # data_name = str(r)
 simulation_time = 300  # 300 s
@@ -10,20 +9,23 @@ simulation_time = 300  # 300 s
 moving_avg = 0  # choose avg delay
 move = 10
 
-tmp_str = "result_om2m/senario19"
+tmp_dir = "result"
+path1 = tmp_dir + "/app_mn1_cpu.txt"
+path2 = tmp_dir + "/app_mn2_cpu.txt"
 
-path1 = tmp_str + "/app_mn1_response.txt"
-path2 = tmp_str + "/app_mn2_response.txt"
-path3 = tmp_str + "/app_mnae1_response.txt"
-path4 = tmp_str + "/app_mnae2_response.txt"
 # path2 = tmp_str + "/output30.txt"
 # path_list = [path1, path2, path3, path4]
-path_list = [path1, path2, path3, path4]
+path_list = [path1, path2]
 service = ["app_mn1", "app_mn2", "app_mnae1", "app_mnae2"]
 
-def cal_delay(f, use_tm, simulation_time):
+
+def cal_delay(f, simulation_time):
     time = []
     delay = []
+    resource_cpu = []
+    resource_replica = []
+
+
     for line in f:
         s = line.split(' ')
 
@@ -32,6 +34,8 @@ def cal_delay(f, use_tm, simulation_time):
             if tmp > 0 and tmp < 1:
                 time.append(float(s[0]))
                 delay.append(tmp * 1000)
+                resource_cpu.append(float(s[2]))
+                resource_replica.append(int(s[3]))
         except:
             print(s[0])
     f.close()
@@ -80,7 +84,7 @@ tmp_count = 0
 for p in path_list:
 
     f = open(p, "r")
-    x, y = cal_delay(f, use_tm, simulation_time)
+    x, y = cal_delay(f, simulation_time)
     # print(len(x), len(y))
     # print(x, y)
     Rmax = 10

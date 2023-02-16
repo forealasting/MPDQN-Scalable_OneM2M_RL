@@ -4,31 +4,27 @@ import matplotlib.pyplot as plt
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
 # r = '100'
-simulation_time = 300  # 300 s
+simulation_time = 3602  # 302 s
 
-# limit_cpus = 1
-# tmp_str = "result2/result_cpu" # result_1016/tm1
-tmp_str = "result_om2m/senario19"
-path1 = tmp_str + "/output_cpu_app_mn1.txt"
-path2 = tmp_str + "/output_cpu_app_mn2.txt"
-path3 = tmp_str + "/output_cpu_app_mnae1.txt"
-path4 = tmp_str + "/output_cpu_app_mnae2.txt"
-service = ["app_mn1", "app_mn2", "app_mnae1", "app_mnae2"]
 # moving for plot
 moving_avg = 1
 move = 10
-# path3 = tmp_str + str(limit_cpus) + "/tmp1/output_cpu100.txt"
-# path4 = tmp_str + str(limit_cpus) + "/output_cputm1.txt"
-# path = "output_cpu" + str(r) + ".txt"
+
+# limit_cpus = 1
+# tmp_str = "result2/result_cpu" # result_1016/tm1
+tmp_dir = "result"
+path1 = tmp_dir + "/app_mn1_cpu.txt"
+path2 = tmp_dir + "/app_mn2_cpu.txt"
+
+service = ["app_mn1", "app_mn2", "app_mnae1", "app_mnae2"]
+
 # path_list = [path1]
-path_list = [path1, path2, path3, path4]
+path_list = [path1, path2]
 
 def cal_cpu(f):
     cpu = []
-
     time = []
 
-    resource_use = []
     for line in f:
         s = line.split(' ')
         if float(s[2]) > 0 and float(s[2]) < 100:
@@ -37,7 +33,7 @@ def cal_cpu(f):
             time.append(float(s[0]))
             cpu.append(float(s[2]))
 
-            resource_use.append(float(s[-1]))
+
     f.close()
 
     # calculate  cpu (ms) ---------------
@@ -78,7 +74,7 @@ def cal_cpu(f):
         y = cpu_m
 
 
-    return time, y, resource_use
+    return time, y
 
 
 # Plot --------------------------------------
@@ -93,7 +89,7 @@ tmp_count = 0
 for p in path_list:
 
     f = open(p, "r")
-    x, y, res = cal_cpu(f)
+    x, y = cal_cpu(f)
     # print(x,y)
     # print(y)
 
@@ -117,13 +113,4 @@ plt.xlim(0, simulation_time)
 plt.ylim(0, 110)
 plt.savefig("Cpu_utilization.png")
 plt.tight_layout()
-plt.show()
-
-
-plt.title("Test")
-plt.xlabel("timestamp")
-plt.ylabel("Resource use ")
-plt.grid(True)
-fig_add(x, res, 'Machine1')
-plt.savefig("Reource_use.png")
 plt.show()

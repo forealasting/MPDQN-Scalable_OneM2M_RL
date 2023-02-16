@@ -101,8 +101,9 @@ class Env:
         self.n_actions = len(self.action_space)
 
         # Need modify ip if ip change
-        self.url_list = ["http://192.168.99.121:666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4", "http://192.168.99.122:777/~/mn-cse/mn-name/AE2/Control_Command_Container", "http://192.168.99.121:1111/test", "http://192.168.99.122:2222/test"]
-
+        self.url_list = url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
+                                    "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container",
+                                    "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
     def reset(self):
         cmd = "sudo docker-machine ssh default docker stack rm app"
@@ -123,7 +124,7 @@ class Env:
                 "con": "true",
                 "cnf": "application/json",
                 "lbl": "req",
-                "rn": str(RFID + 10000),
+                "rn": str(RFID + 1000),
             }
         }
         # URL
@@ -149,19 +150,20 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_cpu = cpu[-1]
+            last_avg_cpu = sum(cpu[-3:])/len(cpu[-3:])
             f.close()
 
-            return last_cpu
+            return last_avg_cpu
         except:
-            print("self.service_name:: ",self.service_name)
+            print("self.service_name:: ", self.service_name)
             print('cant open')
 
     def discretize_cpu_value(self, value):
         return int(round(value / 10))
 
-    def step(self, action_index):
-        global timestamp, send_finish, RFID, change
+    def step(self, action_index, event, done):
+        global timestamp, send_finish, RFID, change, simulation_time
+
         action = self.action_space[action_index]
         if action == '-r':
             if self.replica > 1:
@@ -193,13 +195,17 @@ class Env:
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        time.sleep(40)
-        event.set()
+        time.sleep(30)  # wait service start
+        if not done:
+            print(self.service_name, "_step complete")
+            event.set()
+        print(self.service_name, "_done: ", done)
         response_time_list = []
         for i in range(5):
             time.sleep(3)
             response_time_list.append(self.get_response_time())
-
+        if done:
+            event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         median_response_time = statistics.median(response_time_list)
         median_response_time = median_response_time*1000  # 0.05s -> 50ms
@@ -230,13 +236,12 @@ class Env:
         next_state.append(u/10)
         next_state.append(self.cpus)
         # state.append(req)
-        done = False
+
+        # cost function
         w_pref = 0.5
         w_res = 0.5
-        # cost function
         reward = -(w_pref * c_perf + w_res * c_res)
-
-        return next_state, reward, done
+        return next_state, reward
 
 
 class ReplayBuffer:
@@ -547,13 +552,25 @@ def store_cpu(start_time, woker_name):
                 f.close()
 
 
+def store_error_count(error):
+    # Write the string to a text file
+    path = "result/error.txt"
+    f = open(path, 'a')
+    data = str(error) + '\n'
+    f.write(data)
+
+
 def send_request(stage,request_num, start_time, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
     for episode in range(total_episodes):
+        # print("episode: ", episode)
         print("reset envronment")
+        reset_complete = 0
         reset()  # reset Environment
+        time.sleep(70)
+        print("reset envronment complete")
         reset_complete = 1
         send_finish = 0
         timestamp = 0
@@ -561,17 +578,20 @@ def send_request(stage,request_num, start_time, total_episodes):
             print("timestamp: ", timestamp)
             exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
-            if change == 1:
-                print('change!')
-                time.sleep(30)
+            # if change == 1:
+            if ((timestamp - 1) % 30) == 0:
+                print("wait mn1 mn2 step ...")
+                event_mn1.wait()
+                event_mn2.wait()
+
                 change = 0
             for j in range(i):
                 try:
                     s_time = time.time()
-                    # Need modify if ip change
-                    url = "http://192.168.99.115:666/~/mn-cse/mn-name/AE1/"
+                    # Need modify ip if ip change
+                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                     # change stage
-                    url1 = url + stage[(i*10+j) % 8]
+                    url1 = url + stage[(tmp_count * 10 + j) % 8]
                     if error_rate > random.random():
                         content = "false"
                     else:
@@ -585,11 +605,7 @@ def send_request(stage,request_num, start_time, total_episodes):
 
                 except:
                     error += 1
-                    # print(response.json())
-                    f1 = open("error.txt", 'a')
-                    f1.close()
-                    # print('Cant Send Request!')
-                    time.sleep(2)
+                    # time.sleep(2)
 
                 if use_tm == 1:
                     time.sleep(exp[tmp_count])
@@ -597,10 +613,12 @@ def send_request(stage,request_num, start_time, total_episodes):
 
                 else:
                     time.sleep(1/i)  # send requests every 1s
+
             timestamp += 1
     send_finish = 1
     final_time = time.time()
     alltime = final_time - start_time
+    store_error_count(error)
     print('time:: ', alltime)
 
 

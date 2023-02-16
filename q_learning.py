@@ -24,7 +24,7 @@ request_num = []
 # timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
 # learning step:          0,  ..., 1,     , 120
 
-simulation_time = 3602  # 300 s  # 0 ~ 3601:  3600
+simulation_time = 32  # 300 s  # 0 ~ 3601:  3600
 request_n = simulation_time
 
 
@@ -63,12 +63,12 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
 
 if use_tm:
     #   Modify the workload path if it is different
-    f = open('request/request6.txt')
+    f = open('request/request10.txt')
 
     for line in f:
         if len(request_num) < request_n:
 
-            request_num.append(int(float(line)))
+            request_num.append(int(line))
 else:
     request_num = [r for i in range(simulation_time)]
 
@@ -137,7 +137,7 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_avg_cpu = sum(cpu[-3:])/len(cpu[-3:])
+            last_avg_cpu = statistics.median(cpu[-5:])
             f.close()
 
             return last_avg_cpu
@@ -184,14 +184,19 @@ class Env:
 
         time.sleep(30)  # wait service start
         if not done:
+            print(self.service_name, "_done: ", done)
+            print(self.service_name, "_step complete")
             event.set()
-        print(self.service_name, "_done: ", done)
+
         response_time_list = []
         for i in range(5):
             time.sleep(3)
             response_time_list.append(self.get_response_time())
 
-        event.set()  # if done and after get_response_time
+        if done:
+            print(self.service_name, "_done: ", done)
+            print(self.service_name, "_step complete and done")
+            event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         median_response_time = statistics.median(response_time_list)
         median_response_time = median_response_time*1000  # 0.05s -> 50ms
@@ -356,12 +361,47 @@ def store_cpu(start_time, woker_name):
                     f.close()
 
 
+# reset Environment
+def reset():
+    cmd1 = "sudo docker-machine ssh default docker service scale app_mn1=1"
+    cmd2 = "sudo docker-machine ssh default docker service scale app_mn2=1"
+    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn1"
+    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn2"
+    subprocess.check_output(cmd1, shell=True)
+    subprocess.check_output(cmd2, shell=True)
+    subprocess.check_output(cmd3, shell=True)
+    subprocess.check_output(cmd4, shell=True)
+
+
+def store_reward(service_name, reward):
+    # Write the string to a text file
+    path = "result/" + service_name + "_reward.txt"
+    f = open(path, 'a')
+    data = str(reward) + '\n'
+    f.write(data)
+
+
+def store_trajectory(service_name, step, s, a, r, s_, done):
+    path = "result/" + service_name + "_trajectory.txt"
+    f = open(path, 'a')
+    data = str(step) + ' ' + str(s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(s_)+ ' ' + str(done) + '\n'
+    f.write(data)
+
+
+def store_error_count(error):
+    # Write the string to a text file
+    path = "result/error.txt"
+    f = open(path, 'a')
+    data = str(error) + '\n'
+    f.write(data)
+
+
 def send_request(stage,request_num, start_time, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
     for episode in range(total_episodes):
-        # print("episode: ", episode)
+        print("episode: ", episode)
         print("reset envronment")
         reset_complete = 0
         reset()  # reset Environment
@@ -371,14 +411,16 @@ def send_request(stage,request_num, start_time, total_episodes):
         send_finish = 0
         timestamp = 0
         for i in request_num:
-            print("timestamp: ", timestamp)
+            # print("timestamp: ", timestamp)
             exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
             # if change == 1:
+            event_mn1.clear()
+            event_mn2.clear()
             if ((timestamp - 1) % 30) == 0:
+                print("wait mn1 mn2 step ...")
                 event_mn1.wait()
                 event_mn2.wait()
-
                 change = 0
             for j in range(i):
                 try:
@@ -410,46 +452,12 @@ def send_request(stage,request_num, start_time, total_episodes):
                     time.sleep(1/i)  # send requests every 1s
 
             timestamp += 1
+
     send_finish = 1
     final_time = time.time()
     alltime = final_time - start_time
     store_error_count(error)
     print('time:: ', alltime)
-
-
-def store_error_count(error):
-    # Write the string to a text file
-    path = "result/error.txt"
-    f = open(path, 'a')
-    data = str(error) + '\n'
-    f.write(data)
-
-
-# reset Environment
-def reset():
-    cmd = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn1"
-    subprocess.check_output(cmd, shell=True)
-    cmd1 = "sudo docker-machine ssh default docker service scale app_mn1=1"
-    subprocess.check_output(cmd1, shell=True)
-    cmd = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn2"
-    subprocess.check_output(cmd, shell=True)
-    cmd1 = "sudo docker-machine ssh default docker service scale app_mn2=1"
-    subprocess.check_output(cmd1, shell=True)
-
-
-def store_reward(service_name, reward):
-    # Write the string to a text file
-    path = "result/" + service_name + "_reward.txt"
-    f = open(path, 'a')
-    data = str(reward) + '\n'
-    f.write(data)
-
-
-def store_trajectory(service_name, step, s, a, r, s_, done):
-    path = "result/" + service_name + "_trajectory.txt"
-    f = open(path, 'a')
-    data = str(step) + ' ' + str(s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(s_)+ ' ' + str(done) + '\n'
-    f.write(data)
 
 
 def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, event, service_name):
@@ -461,20 +469,20 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
     all_rewards = []
     step = 0
     init_state = [1, 0.0, 0.5]
-
+    done = False
     for episode in range(total_episodes):
         # initial observation
         state = init_state
         rewards = []  # record reward every episode
-
+        print(service_name, ": episodes", episode)
         while True:
-            if ((timestamp - 1) % 30) == 0:
+            if ((timestamp - 1) % 30) == 0 and not done:
                 # RL choose action based on state
                 action = RL.choose_action(state)
                 # print(service_name, " timestamp: ", timestamp, " step: ", step, " action: ", action)
                 # print("action: ", action)
-                # RL take action and get next state and reward
-                print("timestamp: ", timestamp)
+                # agent take action and get next state and reward
+                print("service_name: ", service_name, "timestamp: ", timestamp)
                 if timestamp == (simulation_time-1):
                     done = True
                 else:
