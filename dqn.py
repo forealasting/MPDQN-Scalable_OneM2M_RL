@@ -15,7 +15,7 @@ import statistics
 import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple
 from IPython.display import clear_output
-
+import os
 # request rate r
 r = 50      # if not use_tm
 use_tm = 0  # if use_tm
@@ -27,14 +27,15 @@ use_tm = 0  # if use_tm
 set_tmin = 1  # 1 if setting tmin
 # cpus = 0.5  # initial cpus
 # replicas = 1  # initial replica
-event = threading.Event()
+event_mn1 = threading.Event()
+event_mn2 = threading.Event()
 
 ## initial
 request_num = []
 # timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
 # learning step:          0,  ..., 1,     , 120
 #
-simulation_time = 32  # 300 s  # 0 ~ 3601:  3600
+simulation_time = 3602  # 300 s  # 0 ~ 3601:  3600
 request_n = simulation_time
 
 ## global variable
@@ -89,6 +90,16 @@ else:
 print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
 
 
+result_dir = "./result/"
+
+# check result directory
+if os.path.exists(result_dir):
+    print("Deleting existing result directory...")
+    raise SystemExit  # end process
+
+# build dir
+os.mkdir(result_dir)
+
 class Env:
 
     def __init__(self, service_name="app_mn1"):
@@ -114,7 +125,7 @@ class Env:
 
     def get_response_time(self):
         global RFID
-        path1 = "result/" + self.service_name + "_response.txt"
+        path1 = result_dir + self.service_name + "_response.txt"
 
         f1 = open(path1, 'a')
 
@@ -140,7 +151,7 @@ class Env:
         return response_time
 
     def get_cpu_utilization(self):
-        path = "result/" + self.service_name + '_cpu.txt'
+        path = result_dir + self.service_name + '_cpu.txt'
         try:
             f = open(path, "r")
             cpu = []
@@ -150,7 +161,7 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_avg_cpu = sum(cpu[-3:])/len(cpu[-3:])
+            last_avg_cpu = statistics.median(cpu[-5:])
             f.close()
 
             return last_avg_cpu
@@ -197,14 +208,18 @@ class Env:
 
         time.sleep(30)  # wait service start
         if not done:
-            print(self.service_name, "_step complete")
+            # print(self.service_name, "_done: ", done)
+            # print(self.service_name, "_step complete")
             event.set()
-        print(self.service_name, "_done: ", done)
+
         response_time_list = []
         for i in range(5):
             time.sleep(3)
             response_time_list.append(self.get_response_time())
+
         if done:
+            # print(self.service_name, "_done: ", done)
+            # print(self.service_name, "_step complete and done")
             event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         median_response_time = statistics.median(response_time_list)
@@ -390,7 +405,7 @@ class DQNAgent:
         self.optimizer.step()
         return loss.item()
 
-    def train(self, episodes: int, plotting_interval: int = 200):
+    def train(self, episodes: int, event,  plotting_interval: int = 200):
         """Train the agent."""
         self.is_test = False
 
@@ -503,7 +518,6 @@ class DQNAgent:
 
 
 
-
 def post_url(url, RFID, content):
 
     headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
@@ -521,14 +535,14 @@ def post_url(url, RFID, content):
 
 
 def store_cpu(start_time, woker_name):
-    global timestamp, cpus, change
-    # time.sleep(70)  # wait environment start
+    global timestamp, cpus, change, reset_complete
+
     cmd = "sudo docker-machine ssh " + woker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
     while True:
 
         if send_finish == 1:
             break
-        if change == 0:
+        if change == 0 and reset_complete == 1:
             returned_text = subprocess.check_output(cmd, shell=True)
             my_data = returned_text.decode('utf8')
             # print(my_data.find("CPUPerc"))
@@ -539,22 +553,49 @@ def store_cpu(start_time, woker_name):
                 my_json = json.loads(my_data[i] + "}")
                 name = my_json['Name'].split(".")[0]
                 cpu = my_json['CPUPerc'].split("%")[0]
-                # state_u.append(cpu)
-                final_time = time.time()
-                t = final_time - start_time
-                path = "result/output_cpu_" + name + ".txt"
-                f = open(path, 'a')
-                data = str(timestamp) + ' ' + str(t) + ' '
-                # for d in state_u:
-                data = data + str(cpu) + ' ' + '\n'
+                if float(cpu) > 0:
+                    final_time = time.time()
+                    t = final_time - start_time
+                    path = result_dir + name + "_cpu.txt"
+                    f = open(path, 'a')
+                    data = str(timestamp) + ' ' + str(t) + ' '
+                    # for d in state_u:
+                    data = data + str(cpu) + ' ' + '\n'
 
-                f.write(data)
-                f.close()
+                    f.write(data)
+                    f.close()
+
+
+# reset Environment
+def reset():
+    cmd1 = "sudo docker-machine ssh default docker service scale app_mn1=1"
+    cmd2 = "sudo docker-machine ssh default docker service scale app_mn2=1"
+    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn1"
+    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn2"
+    subprocess.check_output(cmd1, shell=True)
+    subprocess.check_output(cmd2, shell=True)
+    subprocess.check_output(cmd3, shell=True)
+    subprocess.check_output(cmd4, shell=True)
+
+
+def store_reward(service_name, reward):
+    # Write the string to a text file
+    path = result_dir + service_name + "_reward.txt"
+    f = open(path, 'a')
+    data = str(reward) + '\n'
+    f.write(data)
+
+
+def store_trajectory(service_name, step, s, a, r, s_, done):
+    path = result_dir + service_name + "_trajectory.txt"
+    f = open(path, 'a')
+    data = str(step) + ' ' + str(s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(s_)+ ' ' + str(done) + '\n'
+    f.write(data)
 
 
 def store_error_count(error):
     # Write the string to a text file
-    path = "result/error.txt"
+    path = result_dir + "error.txt"
     f = open(path, 'a')
     data = str(error) + '\n'
     f.write(data)
@@ -565,7 +606,7 @@ def send_request(stage,request_num, start_time, total_episodes):
     global timestamp, use_tm, RFID
     error = 0
     for episode in range(total_episodes):
-        # print("episode: ", episode)
+        print("episode: ", episode)
         print("reset envronment")
         reset_complete = 0
         reset()  # reset Environment
@@ -575,15 +616,16 @@ def send_request(stage,request_num, start_time, total_episodes):
         send_finish = 0
         timestamp = 0
         for i in request_num:
-            print("timestamp: ", timestamp)
+            # print("timestamp: ", timestamp)
             exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
             # if change == 1:
+            event_mn1.clear()
+            event_mn2.clear()
             if ((timestamp - 1) % 30) == 0:
                 print("wait mn1 mn2 step ...")
                 event_mn1.wait()
                 event_mn2.wait()
-
                 change = 0
             for j in range(i):
                 try:
@@ -615,6 +657,7 @@ def send_request(stage,request_num, start_time, total_episodes):
                     time.sleep(1/i)  # send requests every 1s
 
             timestamp += 1
+
     send_finish = 1
     final_time = time.time()
     alltime = final_time - start_time
@@ -622,31 +665,12 @@ def send_request(stage,request_num, start_time, total_episodes):
     print('time:: ', alltime)
 
 
-# reset Environment
-def reset():
-    cmd = "sudo docker-machine ssh default docker stack rm app"
-    subprocess.check_output(cmd, shell=True)
-    cmd1 = "sudo docker-machine ssh default docker stack deploy --compose-file docker-compose.yml app"
-    subprocess.check_output(cmd1, shell=True)
-    time.sleep(70)
-
-
-def store_reward(service_name, reward):
-    # Convert the list to a string
-    data = '\n'.join(str(x) for x in reward)
-
-    # Write the string to a text file
-    path = service_name + "reward.txt"
-    f = open(path, 'w')
-    f.write(data)
-
-
-def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, service_name):
+def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event, service_name):
     global timestamp, simulation_time, change, RFID, send_finish
 
     env = Env(service_name)
     agent = DQNAgent(env, memory_size, batch_size, target_update, epsilon_decay)
-    agent.train(total_episodes)
+    agent.train(total_episodes, event)
 
 
 start_time = time.time()
@@ -654,8 +678,8 @@ start_time = time.time()
 t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
-t4 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, 'app_mn1', ))
-t5 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, 'app_mn2', ))
+t4 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update,event_mn1, 'app_mn1', ))
+t5 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update,event_mn2, 'app_mn2', ))
 
 
 t1.start()

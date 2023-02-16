@@ -7,6 +7,8 @@ import numpy as np
 import random
 import statistics
 import copy
+import os
+
 
 # request rate r
 r = 50      # if not use_tm
@@ -24,7 +26,7 @@ request_num = []
 # timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
 # learning step:          0,  ..., 1,     , 120
 
-simulation_time = 32  # 300 s  # 0 ~ 3601:  3600
+simulation_time = 3602  # 300 s  # 0 ~ 3601:  3600
 request_n = simulation_time
 
 
@@ -57,13 +59,24 @@ max_epsilon = 1
 min_epsilon = 0.1
 epsilon_decay = 1/300
 
-## 7 stage
+##  stage
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
+# define result path
+result_dir = "./all_result/result/"
+
+# check result directory
+if os.path.exists(result_dir):
+    print("Deleting existing result directory...")
+    raise SystemExit  # end process
+
+# build dir
+os.mkdir(result_dir)
+
 if use_tm:
     #   Modify the workload path if it is different
-    f = open('request/request10.txt')
+    f = open('request/request6.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -101,7 +114,7 @@ class Env:
 
     def get_response_time(self):
         global RFID
-        path1 = "result/" + self.service_name + "_response.txt"
+        path1 = result_dir + self.service_name + "_response.txt"
 
         f1 = open(path1, 'a')
 
@@ -127,7 +140,7 @@ class Env:
         return response_time
 
     def get_cpu_utilization(self):
-        path = "result/" + self.service_name + '_cpu.txt'
+        path = result_dir + self.service_name + '_cpu.txt'
         try:
             f = open(path, "r")
             cpu = []
@@ -184,8 +197,8 @@ class Env:
 
         time.sleep(30)  # wait service start
         if not done:
-            print(self.service_name, "_done: ", done)
-            print(self.service_name, "_step complete")
+            # print(self.service_name, "_done: ", done)
+            # print(self.service_name, "_step complete")
             event.set()
 
         response_time_list = []
@@ -194,8 +207,8 @@ class Env:
             response_time_list.append(self.get_response_time())
 
         if done:
-            print(self.service_name, "_done: ", done)
-            print(self.service_name, "_step complete and done")
+            # print(self.service_name, "_done: ", done)
+            # print(self.service_name, "_step complete and done")
             event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         median_response_time = statistics.median(response_time_list)
@@ -351,7 +364,7 @@ def store_cpu(start_time, woker_name):
                 if float(cpu) > 0:
                     final_time = time.time()
                     t = final_time - start_time
-                    path = "result/" + name + "_cpu.txt"
+                    path = result_dir + name + "_cpu.txt"
                     f = open(path, 'a')
                     data = str(timestamp) + ' ' + str(t) + ' '
                     # for d in state_u:
@@ -375,14 +388,14 @@ def reset():
 
 def store_reward(service_name, reward):
     # Write the string to a text file
-    path = "result/" + service_name + "_reward.txt"
+    path = result_dir + service_name + "_reward.txt"
     f = open(path, 'a')
     data = str(reward) + '\n'
     f.write(data)
 
 
 def store_trajectory(service_name, step, s, a, r, s_, done):
-    path = "result/" + service_name + "_trajectory.txt"
+    path = result_dir + service_name + "_trajectory.txt"
     f = open(path, 'a')
     data = str(step) + ' ' + str(s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(s_)+ ' ' + str(done) + '\n'
     f.write(data)
@@ -390,7 +403,7 @@ def store_trajectory(service_name, step, s, a, r, s_, done):
 
 def store_error_count(error):
     # Write the string to a text file
-    path = "result/error.txt"
+    path = result_dir + "error.txt"
     f = open(path, 'a')
     data = str(error) + '\n'
     f.write(data)
@@ -470,19 +483,23 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
     step = 0
     init_state = [1, 0.0, 0.5]
     done = False
+    check_timestamp = -1
     for episode in range(total_episodes):
         # initial observation
         state = init_state
         rewards = []  # record reward every episode
-        print(service_name, ": episodes", episode)
+
         while True:
-            if ((timestamp - 1) % 30) == 0 and not done:
+            if timestamp == 0:
+                done = False
+            if ((timestamp - 1) % 30) == 0 and not done and (check_timestamp != timestamp):
                 # RL choose action based on state
+                check_timestamp = timestamp
                 action = RL.choose_action(state)
                 # print(service_name, " timestamp: ", timestamp, " step: ", step, " action: ", action)
                 # print("action: ", action)
                 # agent take action and get next state and reward
-                print("service_name: ", service_name, "timestamp: ", timestamp)
+                print("service_name: ", service_name, " timestamp: ", timestamp)
                 if timestamp == (simulation_time-1):
                     done = True
                 else:
@@ -490,7 +507,6 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
 
                 next_state, reward = env.step(action, event, done)
                 print(service_name, " next_state: ", next_state, " reward: ", reward, " done: ", done)
-
 
                 store_trajectory(service_name, step, state, action, reward, next_state, done)
                 rewards.append(reward)
