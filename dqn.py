@@ -16,6 +16,9 @@ import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple
 from IPython.display import clear_output
 import os
+import datetime
+print(datetime.datetime.now())
+
 # request rate r
 r = 50      # if not use_tm
 use_tm = 0  # if use_tm
@@ -29,6 +32,7 @@ set_tmin = 1  # 1 if setting tmin
 # replicas = 1  # initial replica
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
+event_timestamp_Ccontrol = threading.Event()
 
 ## initial
 request_num = []
@@ -90,7 +94,7 @@ else:
 print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
 
 
-result_dir = "./result/"
+result_dir = "./dqn_result/"
 
 # check result directory
 if os.path.exists(result_dir):
@@ -161,12 +165,12 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_avg_cpu = statistics.median(cpu[-5:])
+            last_avg_cpu = statistics.median(cpu[-3:])
             f.close()
 
             return last_avg_cpu
         except:
-            print("self.service_name:: ", self.service_name)
+
             print('cant open')
 
     def discretize_cpu_value(self, value):
@@ -205,8 +209,9 @@ class Env:
                 change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
+        if action != '0':
+            time.sleep(30)  # wait service start
 
-        time.sleep(30)  # wait service start
         if not done:
             # print(self.service_name, "_done: ", done)
             # print(self.service_name, "_step complete")
@@ -229,9 +234,9 @@ class Env:
         else:
             Rt = median_response_time
         if self.service_name == "app_mn1":
-            t_max = 25
-        elif self.service_name == "app_mn2":
             t_max = 20
+        elif self.service_name == "app_mn2":
+            t_max = 10
         else:
             t_max = 5
 
@@ -332,10 +337,10 @@ class DQNAgent:
 
         # obs_dim = env.observation_space.shape[0]
         # action_dim = env.action_space.n
-        obs_dim = 4  # S = ={𝑘, 𝑢, 𝑐,𝑟}
+        obs_dim = 4  # S = {k, u , c}  # S = {k, u , c, r}
         action_dim = 5  # 𝐴={−𝑟, −1,  0,  1,  𝑟}
 
-        self.env = Env()
+        self.env = env
         self.memory = ReplayBuffer(obs_dim, memory_size, batch_size)
         self.batch_size = batch_size
         self.epsilon = max_epsilon
@@ -408,50 +413,61 @@ class DQNAgent:
     def train(self, episodes: int, event,  plotting_interval: int = 200):
         """Train the agent."""
         self.is_test = False
-
-        state = self.env.reset()
         update_cnt = 0
         epsilons = []
         losses = []
-        scores = []
-        score = 0
+        rewards = []
+        reward = 0
+        init_state = [1, 0.0, 0.5]
+        done = False
+        step = 0
+        for episode in range(1, episodes + 1):
+            state = init_state
 
-        for frame_idx in range(1, episodes + 1):
-            action = self.select_action(state)
-            next_state, reward, done = self.step(action)
+            while True:
+                if timestamp == 0:
+                    done = False
+                event_timestamp_Ccontrol.wait()
+                if (((timestamp - 1) % 30) == 0) and (not done):
+                    action = self.select_action(state)
+                    next_state, reward, done = self.step(action)
 
-            state = next_state
-            score += reward
+                    state = next_state
+                    reward += reward
+                    if timestamp == (simulation_time - 1):
+                        done = True
+                    else:
+                        done = False
 
-            # if episode ends
-            if done:
-                state = self.env.reset()
-                scores.append(score)
-                score = 0
+                    # if episode ends
+                    if done:
+                        # state = self.env.reset()
+                        rewards.append(reward)
+                        reward = 0
 
-            # if training is ready
-            if len(self.memory) >= self.batch_size:
-                loss = self.update_model()
-                losses.append(loss)
-                update_cnt += 1
+                    # if training is ready
+                    if len(self.memory) >= self.batch_size:
+                        loss = self.update_model()
+                        losses.append(loss)
+                        update_cnt += 1
 
-                # linearly decrease epsilon
-                self.epsilon = max(
-                    self.min_epsilon, self.epsilon - (
-                            self.max_epsilon - self.min_epsilon
-                    ) * self.epsilon_decay
-                )
-                epsilons.append(self.epsilon)
+                        # linearly decrease epsilon
+                        self.epsilon = max(
+                            self.min_epsilon, self.epsilon - (
+                                    self.max_epsilon - self.min_epsilon
+                            ) * self.epsilon_decay
+                        )
+                        epsilons.append(self.epsilon)
 
-                # if hard update is needed
-                if update_cnt % self.target_update == 0:
-                    self._target_hard_update()
+                        # if hard update is needed
+                        if update_cnt % self.target_update == 0:
+                            self._target_hard_update()
 
-            # plotting
-            if frame_idx % plotting_interval == 0:
-                self._plot(frame_idx, scores, losses, epsilons)
+                    # plotting
+                    if episode % plotting_interval == 0:
+                        self._plot(episode, rewards, losses, epsilons)
+        torch.save(dqn, 'model.pth')
 
-        # self.env.close()
 
     def test(self) -> List[np.ndarray]:
         """Test the agent."""
@@ -459,14 +475,14 @@ class DQNAgent:
 
         state = self.env.reset()
         done = False
-        score = 0
+        reward = 0
 
-        frames = []
+        # frames = []
 
-        print("score: ", score)
-        self.env.close()
+        print("reward: ", reward)
+        # self.env.close()
 
-        return frames
+        # return frames
 
     def _compute_dqn_loss(self, samples: Dict[str, np.ndarray]) -> torch.Tensor:
         """Return dqn loss."""
@@ -497,8 +513,8 @@ class DQNAgent:
 
     def _plot(
             self,
-            frame_idx: int,
-            scores: List[float],
+            episode: int,
+            rewards: List[float],
             losses: List[float],
             epsilons: List[float],
     ):
@@ -506,8 +522,8 @@ class DQNAgent:
         clear_output(True)
         plt.figure(figsize=(20, 5))
         plt.subplot(131)
-        plt.title('frame %s. score: %s' % (frame_idx, np.mean(scores[-10:])))
-        plt.plot(scores)
+        plt.title('frame %s. reward: %s' % (episode, np.mean(rewards[-10:])))
+        plt.plot(rewards)
         plt.subplot(132)
         plt.title('loss')
         plt.plot(losses)
@@ -616,6 +632,7 @@ def send_request(stage,request_num, start_time, total_episodes):
         send_finish = 0
         timestamp = 0
         for i in request_num:
+            event_timestamp_Ccontrol.clear()
             # print("timestamp: ", timestamp)
             exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
@@ -647,7 +664,7 @@ def send_request(stage,request_num, start_time, total_episodes):
 
                 except:
                     error += 1
-                    # time.sleep(2)
+
 
                 if use_tm == 1:
                     time.sleep(exp[tmp_count])
@@ -657,6 +674,7 @@ def send_request(stage,request_num, start_time, total_episodes):
                     time.sleep(1/i)  # send requests every 1s
 
             timestamp += 1
+            event_timestamp_Ccontrol.set()
 
     send_finish = 1
     final_time = time.time()
@@ -678,9 +696,8 @@ start_time = time.time()
 t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
-t4 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update,event_mn1, 'app_mn1', ))
-t5 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update,event_mn2, 'app_mn2', ))
-
+t4 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, event_mn1, 'app_mn1', ))
+t5 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, event_mn2, 'app_mn2', ))
 
 t1.start()
 t2.start()

@@ -8,7 +8,8 @@ import random
 import statistics
 import copy
 import os
-
+import datetime
+print(datetime.datetime.now())
 
 # request rate r
 r = 50      # if not use_tm
@@ -39,6 +40,8 @@ RFID = 0  # random number for post request data name
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
+Rmax_mn1 = 20
+Rmax_mn2 = 10
 
 # Need modify ip if ip change
 ip = "192.168.99.121"  # app_mn1
@@ -152,12 +155,12 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_avg_cpu = statistics.median(cpu[-5:])
+            last_avg_cpu = statistics.median(cpu[-3:])
             f.close()
 
             return last_avg_cpu
         except:
-            print("self.service_name:: ", self.service_name)
+
             print('cant open')
 
     def discretize_cpu_value(self, value):
@@ -221,11 +224,9 @@ class Env:
         else:
             Rt = median_response_time
         if self.service_name == "app_mn1":
-            t_max = 20
+            t_max = Rmax_mn1
         elif self.service_name == "app_mn2":
-            t_max = 10
-        else:
-            t_max = 5
+            t_max = Rmax_mn2
 
         if median_response_time < t_max:
             c_perf = 0
