@@ -8,7 +8,7 @@ episodes = 5  # 300 s
 
 # limit_cpus = 1
 # tmp_str = "result2/result_cpu" # result_1016/tm1
-tmp_str = "result4_0215"
+tmp_str = "all_result/result4_0215"
 path1 = tmp_str + "/app_mn1_reward.txt"
 
 service = ["app_mn1", "app_mn2", "app_mnae1", "app_mnae2"]

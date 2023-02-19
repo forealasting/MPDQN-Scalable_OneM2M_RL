@@ -12,7 +12,7 @@ import os
 
 # request rate r
 r = 50      # if not use_tm
-use_tm = 1  # if use_tm
+use_tm = 0  # if use_tm
 
 # initial setting (threshold setting) # no use now
 # T_max = 0.065  # t_max violation
@@ -38,6 +38,8 @@ timestamp = 0  # plus 1 in funcntion : send_request
 RFID = 0  # random number for post request data name
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
+event_timestamp_Ccontrol = threading.Event()
+
 # Need modify ip if ip change
 ip = "192.168.99.121"  # app_mn1
 ip1 = "192.168.99.122"  # app_mn2
@@ -194,8 +196,9 @@ class Env:
                 change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
+        if action != '0':
+            time.sleep(30)  # wait service start
 
-        time.sleep(30)  # wait service start
         if not done:
             # print(self.service_name, "_done: ", done)
             # print(self.service_name, "_step complete")
@@ -218,9 +221,9 @@ class Env:
         else:
             Rt = median_response_time
         if self.service_name == "app_mn1":
-            t_max = 25
-        elif self.service_name == "app_mn2":
             t_max = 20
+        elif self.service_name == "app_mn2":
+            t_max = 10
         else:
             t_max = 5
 
@@ -424,6 +427,7 @@ def send_request(stage,request_num, start_time, total_episodes):
         send_finish = 0
         timestamp = 0
         for i in request_num:
+            event_timestamp_Ccontrol.clear()
             # print("timestamp: ", timestamp)
             exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
@@ -455,7 +459,7 @@ def send_request(stage,request_num, start_time, total_episodes):
 
                 except:
                     error += 1
-                    # time.sleep(2)
+
 
                 if use_tm == 1:
                     time.sleep(exp[tmp_count])
@@ -465,6 +469,7 @@ def send_request(stage,request_num, start_time, total_episodes):
                     time.sleep(1/i)  # send requests every 1s
 
             timestamp += 1
+            event_timestamp_Ccontrol.set()
 
     send_finish = 1
     final_time = time.time()
@@ -483,7 +488,7 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
     step = 0
     init_state = [1, 0.0, 0.5]
     done = False
-    check_timestamp = -1
+
     for episode in range(total_episodes):
         # initial observation
         state = init_state
@@ -492,21 +497,22 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
         while True:
             if timestamp == 0:
                 done = False
-            if ((timestamp - 1) % 30) == 0 and not done and (check_timestamp != timestamp):
+            event_timestamp_Ccontrol.wait()
+            if (((timestamp - 1) % 30) == 0) and (not done):
                 # RL choose action based on state
                 check_timestamp = timestamp
                 action = RL.choose_action(state)
-                # print(service_name, " timestamp: ", timestamp, " step: ", step, " action: ", action)
+                print(service_name, " timestamp: ", timestamp, " step: ", step, " action: ", action)
                 # print("action: ", action)
                 # agent take action and get next state and reward
-                print("service_name: ", service_name, " timestamp: ", timestamp)
+                print("service_name: ", service_name, " timestamp: ", timestamp, "check_timestamp: ", check_timestamp)
                 if timestamp == (simulation_time-1):
                     done = True
                 else:
                     done = False
 
                 next_state, reward = env.step(action, event, done)
-                print(service_name, " next_state: ", next_state, " reward: ", reward, " done: ", done)
+                print(service_name, "action: ", action, " next_state: ", next_state, " reward: ", reward, " done: ", done)
 
                 store_trajectory(service_name, step, state, action, reward, next_state, done)
                 rewards.append(reward)
