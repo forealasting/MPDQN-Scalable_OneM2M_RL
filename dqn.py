@@ -50,10 +50,14 @@ timestamp = 0  # plus 1 in funcntion : send_request
 RFID = 0  # random number for data
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
+event_timestamp_Ccontrol = threading.Event()
 # Need modify ip if ip change
 ip = "192.168.99.121"  # app_mn1
 ip1 = "192.168.99.122"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
+Rmax_mn1 = 20
+Rmax_mn2 = 10
+
 
 ## Learning parameter
 # S ={k, u , c, r}
@@ -234,9 +238,9 @@ class Env:
         else:
             Rt = median_response_time
         if self.service_name == "app_mn1":
-            t_max = 20
+            t_max = Rmax_mn1
         elif self.service_name == "app_mn2":
-            t_max = 10
+            t_max = Rmax_mn2
         else:
             t_max = 5
 
@@ -375,8 +379,7 @@ class DQNAgent:
         """Select an action from the input state."""
         # epsilon greedy policy
         if self.epsilon > np.random.random():
-            # selected_action = self.env.action_space.sample()  #need change
-            selected_action = random.sample(self.env.action_space, 1)  # need change
+            selected_action = random.sample(self.env.n_actions, 1)
         else:
             selected_action = self.dqn(
                 torch.FloatTensor(state).to(self.device)
@@ -411,6 +414,8 @@ class DQNAgent:
         return loss.item()
 
     def train(self, episodes: int, event,  plotting_interval: int = 200):
+        global timestamp, simulation_time, change, send_finish
+
         """Train the agent."""
         self.is_test = False
         update_cnt = 0
@@ -419,6 +424,7 @@ class DQNAgent:
         rewards = []
         reward = 0
         init_state = [1, 0.0, 0.5]
+        init_state = np.ndarray(init_state)
         done = False
         step = 0
         for episode in range(1, episodes + 1):

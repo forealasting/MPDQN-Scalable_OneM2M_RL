@@ -27,7 +27,7 @@ request_num = []
 # timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
 # learning step:          0,  ..., 1,     , 120
 
-simulation_time = 3602  # 300 s  # 0 ~ 3601:  3600
+simulation_time = 3602  # 0 ~ 3601:  3602
 request_n = simulation_time
 
 
@@ -81,7 +81,7 @@ os.mkdir(result_dir)
 
 if use_tm:
     #   Modify the workload path if it is different
-    f = open('request/request6.txt')
+    f = open('request/request10.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -275,7 +275,7 @@ class QLearningTable:
             # choose random action
             action = np.random.choice(available_actions)
         else:
-            # print(state[0], state[1], state[2])
+
             # choose greedy action
             q_values = self.q_table[s[0], s[1], s[2], :]
             q_values[np.isin(range(5), available_actions, invert=True)] = -np.iinfo(np.int32).max
@@ -302,7 +302,7 @@ class QLearningTable:
         else:
             q_target = r + self.gamma * np.max(self.q_table[s_[0], s_[1], s_[2], :])
         self.q_table[s[0], s[1], s[2], a] = q_predict + self.lr * (q_target - q_predict)
-        # print(self.q_table[s[0], s[1], s[2], a])
+
         # linearly decrease epsilon
         self.epsilon = max(
             self.min_epsilon, self.epsilon - (
@@ -315,17 +315,17 @@ class QLearningTable:
         # k (replica): 1 ~ 3                          actual value : same
         # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
         # c (used cpus) : 0.1 0.2 ... 1               actual value : same
-        # action_space = ['-r', -1, 0, 1, 'r']
+        # action_space = ['-r', -1, 0, 1, 'r']        r : replica   1: cpus
 
         actions = [0, 1, 2, 3, 4]  # action index
         if state[0] == 1:
-            actions.remove(1)
+            actions.remove(0)
         if state[0] == 3:
-            actions.remove(3)
-        if state[2] == 1:
             actions.remove(4)
         if state[2] == 0.5:
-            actions.remove(0)
+            actions.remove(1)
+        if state[2] == 1:
+            actions.remove(3)
 
         return actions
 
@@ -480,7 +480,7 @@ def send_request(stage,request_num, start_time, total_episodes):
 
 
 def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, event, service_name):
-    global timestamp, simulation_time, change, RFID, send_finish
+    global timestamp, simulation_time, change, send_finish
 
     env = Env(service_name)
     actions = list(range(env.n_actions))
@@ -501,19 +501,17 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
             event_timestamp_Ccontrol.wait()
             if (((timestamp - 1) % 30) == 0) and (not done):
                 # RL choose action based on state
-                check_timestamp = timestamp
                 action = RL.choose_action(state)
-                print(service_name, " timestamp: ", timestamp, " step: ", step, " action: ", action)
-                # print("action: ", action)
+
                 # agent take action and get next state and reward
-                print("service_name: ", service_name, " timestamp: ", timestamp, "check_timestamp: ", check_timestamp)
+                # print("service_name: ", service_name, " timestamp: ", timestamp, " step: ", step)
                 if timestamp == (simulation_time-1):
                     done = True
                 else:
                     done = False
 
                 next_state, reward = env.step(action, event, done)
-                print(service_name, "action: ", action, " next_state: ", next_state, " reward: ", reward, " done: ", done)
+                print(service_name, "action: ", " timestamp: ", timestamp, " step: ", step, action, " next_state: ", next_state, " reward: ", reward, " done: ", done)
 
                 store_trajectory(service_name, step, state, action, reward, next_state, done)
                 rewards.append(reward)
