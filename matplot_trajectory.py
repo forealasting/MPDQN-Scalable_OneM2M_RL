@@ -13,25 +13,25 @@ move = 10
 # limit_cpus = 1
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 tmp_dir = "all_result/result_0221"
-path1 = tmp_dir + "/app_mn1_response.txt"
-path2 = tmp_dir + "/app_mn2_response.txt"
+path1 = tmp_dir + "/app_mn1_trajectory.txt"
+path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
 service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
 
 # path_list = [path1]
 path_list = [path1, path2]
 
-def cal_cpu(f):
+def parse(f):
+    step = []
     cpu = []
     time = []
 
     for line in f:
         s = line.split(' ')
-        if float(s[2]) > 0 and float(s[2]) < 100:
-            # print(float(s[0]), float(s[2]))
+        print(s[0])
+        print(s[1])
+        a = float(s[1])
 
-            time.append(float(s[0]))
-            cpu.append(float(s[2]))
 
 
     f.close()
@@ -106,7 +106,7 @@ tmp_count = 0
 for p in path_list:
 
     f = open(p, "r")
-    x, y = cal_cpu(f)
+    x, y = parse(f)
 
     # print(y)
 

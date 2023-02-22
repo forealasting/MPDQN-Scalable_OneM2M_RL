@@ -79,7 +79,7 @@ def cal_delay(f, simulation_time):
 
                 avg = sum(delay[:i + 1]) / (i + 1)
             else:
-                avg = sum(delay[i - move+ 1:i + 1]) / move
+                avg = sum(delay[i - move + 1:i + 1]) / move
 
             delay_m.append(avg)
 

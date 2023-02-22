@@ -40,8 +40,8 @@ RFID = 0  # random number for post request data name
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
-Rmax_mn1 = 20
-Rmax_mn2 = 10
+Rmax_mn1 = 25
+Rmax_mn2 = 15
 
 # Need modify ip if ip change
 ip = "192.168.99.121"  # app_mn1
@@ -55,7 +55,7 @@ error_rate = 0.2  # 0.2/0.5
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 5            # Total episodes
+total_episodes = 4            # Total episodes
 learning_rate = 0.01          # Learning rate
 # max_steps = 121              # Max steps per episode
 # Exploration parameters
@@ -214,7 +214,7 @@ class Env:
 
         if done:
             # print(self.service_name, "_done: ", done)
-            # print(self.service_name, "_step complete and done")
+            time.sleep(1)
             event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         median_response_time = statistics.median(response_time_list)
@@ -422,7 +422,7 @@ def send_request(stage,request_num, start_time, total_episodes):
         print("reset envronment")
         reset_complete = 0
         reset()  # reset Environment
-        time.sleep(70)
+        time.sleep(60)
         print("reset envronment complete")
         reset_complete = 1
         send_finish = 0
@@ -494,7 +494,7 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
         # initial observation
         state = init_state
         rewards = []  # record reward every episode
-
+        done = False
         while True:
             if timestamp == 0:
                 done = False
@@ -511,7 +511,7 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
                     done = False
 
                 next_state, reward = env.step(action, event, done)
-                print(service_name, "action: ", " timestamp: ", timestamp, " step: ", step, action, " next_state: ", next_state, " reward: ", reward, " done: ", done)
+                print(service_name, "action: ", action, " step: ", step, " next_state: ", next_state, " reward: ", reward, " done: ", done)
 
                 store_trajectory(service_name, step, state, action, reward, next_state, done)
                 rewards.append(reward)
