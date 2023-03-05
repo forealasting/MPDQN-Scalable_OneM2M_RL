@@ -17,10 +17,11 @@ from typing import Dict, List, Tuple
 from IPython.display import clear_output
 import os
 import datetime
+import concurrent.futures
 print(datetime.datetime.now())
 
 # request rate r
-r = 50      # if not use_tm
+data_rate = 50      # if not use_tm
 use_tm = 0  # if use_tm
 
 
@@ -89,13 +90,13 @@ if use_tm:
 
             request_num.append(int(float(line)))
 else:
-    request_num = [r for i in range(simulation_time)]
+    request_num = [data_rate for i in range(simulation_time)]
 
 
 print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
 
 
-result_dir = "./dqn_result/"
+result_dir = "./dqn_result1/"
 
 # check result directory
 if os.path.exists(result_dir):
@@ -129,11 +130,11 @@ class Env:
         time.sleep(60)
 
     def get_response_time(self):
-        global RFID
+
         path1 = result_dir + self.service_name + "_response.txt"
 
         f1 = open(path1, 'a')
-
+        RFID = random.randint(0, 1000000)
         headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
         data = {
             "m2m:cin": {
@@ -146,10 +147,14 @@ class Env:
         # URL
         service_name_list = ["app_mn1", "app_mn2"]
         url = self.url_list[service_name_list.index(self.service_name)]
-        start = time.time()
-        response = requests.post(url, headers=headers, json=data)
-        end = time.time()
-        response_time = end - start
+        try:
+            start = time.time()
+            response = requests.post(url, headers=headers, json=data, timeout=0.5)
+            end = time.time()
+            response_time = end - start
+        except requests.exceptions.Timeout:
+            response = "timeout"
+            response_time = 0.5
         data1 = str(timestamp) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
         f1.write(data1)
         f1.close()
@@ -166,7 +171,7 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_avg_cpu = statistics.median(cpu[-3:])
+            last_avg_cpu = statistics.median(cpu[-5:])
             f.close()
 
             return last_avg_cpu
@@ -178,7 +183,7 @@ class Env:
         return int(round(value / 10))
 
     def step(self, action_index, event, done):
-        global timestamp, send_finish, RFID, change, simulation_time
+        global timestamp, send_finish, change, simulation_time
 
         action = self.action_space[action_index]
         if action == '-r':
@@ -219,17 +224,19 @@ class Env:
             event.set()
 
         response_time_list = []
+        time.sleep(10)
         for i in range(5):
             time.sleep(3)
             response_time_list.append(self.get_response_time())
 
         if done:
             # print(self.service_name, "_done: ", done)
-            # print(self.service_name, "_step complete and done")
+            time.sleep(1)
             event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         median_response_time = statistics.median(response_time_list)
         median_response_time = median_response_time*1000  # 0.05s -> 50ms
+        t_max = 0
         if median_response_time >= 50:
             Rt = 50
         else:
@@ -238,8 +245,6 @@ class Env:
             t_max = Rmax_mn1
         elif self.service_name == "app_mn2":
             t_max = Rmax_mn2
-        else:
-            t_max = 5
 
         if median_response_time < t_max:
             c_perf = 0
@@ -256,15 +261,13 @@ class Env:
         next_state.append(self.replica)
         next_state.append(u/10)
         next_state.append(self.cpus)
-        # next_state.append(req)
-        next_state = np.array(next_state, dtype=float)
+        # state.append(req)
+
         # cost function
         w_pref = 0.5
         w_res = 0.5
         reward = -(w_pref * c_perf + w_res * c_res)
-
         return next_state, reward
-
 
 class ReplayBuffer:
     """A simple numpy replay buffer."""
@@ -551,25 +554,6 @@ class DQNAgent:
         """Hard update: target <- local."""
         self.dqn_target.load_state_dict(self.dqn.state_dict())
 
-
-
-def post_url(url, RFID, content):
-
-    headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
-    data = {
-        "m2m:cin": {
-            "con": content,
-            "cnf": "application/json",
-            "lbl": "req",
-            "rn": str(RFID),
-        }
-    }
-    response = requests.post(url, headers=headers, json=data)
-
-    return response
-
-
-
 def store_cpu(start_time, woker_name):
     global timestamp, cpus, change, reset_complete
 
@@ -632,8 +616,10 @@ def store_loss(service_name, loss):
 
 def store_trajectory(service_name, step, s, a, r, s_, done):
     path = result_dir + service_name + "_trajectory.txt"
+    tmp_s = list(s)
+    tmp_s_ = list(s_)
     f = open(path, 'a')
-    data = str(step) + ' ' + str(s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(s_)+ ' ' + str(done) + '\n'
+    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
     f.write(data)
 
 
@@ -645,14 +631,67 @@ def store_error_count(error):
     f.write(data)
 
 
-def send_request(stage,request_num, start_time, total_episodes):
+def post(url):
+    RFID = random.randint(0, 1000000)
+
+    if error_rate > random.random():
+        content = "false"
+    else:
+        content = "true"
+    headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
+    data = {
+        "m2m:cin": {
+            "con": content,
+            "cnf": "application/json",
+            "lbl": "req",
+            "rn": str(RFID),
+        }
+    }
+    url1 = url + stage[random.randint(0, 7)]
+
+    s_time = time.time()
+    try:
+        response = requests.post(url1, headers=headers, json=data, timeout=0.5)
+        # response = requests.post(url1, headers=headers, json=data)
+        rt = time.time() - s_time
+        response = str(response.status_code)
+    except requests.exceptions.Timeout:
+        response = "timeout"
+        rt = 0.5
+
+    return response, rt
+
+
+def post_url(timestamp, url, rate, use_tm):
+
+    exp = np.random.exponential(scale=1 / rate, size=rate)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=rate) as executor:
+        tmp_count = 0
+        results = []
+
+        for i in range(rate):
+            # url1 = url + stage[(timestamp * 10 + tmp_count) % 8]
+            results.append(executor.submit(post, url))
+            if use_tm == 1:
+                time.sleep(exp[tmp_count])
+                tmp_count += 1
+            else:
+                time.sleep(1/rate)  # send requests every 1 / rate s
+
+        for result in concurrent.futures.as_completed(results):
+            response, response_time = result.result()
+            # print(type(response.status_code), response_time)
+            if response != "201":
+                # store_rt(response_time, response_time)
+                print(response)
+            # store_rt(timestamp, response, response_time)
+
+
+def send_request(stage, request_num, start_time, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
     for episode in range(total_episodes):
-        event_timestamp_Ccontrol.clear()
-        event_mn1.clear()
-        event_mn2.clear()
         print("episode: ", episode)
         print("reset envronment")
         reset_complete = 0
@@ -663,56 +702,34 @@ def send_request(stage,request_num, start_time, total_episodes):
         send_finish = 0
         timestamp = 0
         for i in request_num:
-            # event_timestamp_Ccontrol.clear()
-            print("timestamp: ", timestamp)
-            exp = np.random.exponential(scale=1 / i, size=i)
+            event_timestamp_Ccontrol.clear()
+            # print("timestamp: ", timestamp)
             tmp_count = 0
-            # event_mn1.clear()
-            # event_mn2.clear()
+            # if change == 1:
+            event_mn1.clear()
+            event_mn2.clear()
             if ((timestamp - 1) % 30) == 0:
                 print("wait mn1 mn2 step ...")
                 event_mn1.wait()
                 event_mn2.wait()
                 change = 0
-            for j in range(i):
-                try:
-                    s_time = time.time()
-                    # Need modify ip if ip change
-                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-                    # change stage
-                    url1 = url + stage[(tmp_count * 10 + j) % 8]
-                    if error_rate > random.random():
-                        content = "false"
-                    else:
-                        content = "true"
-                    response = post_url(url1, RFID, content)
-                    # print(response)
-                    t_time = time.time()
-                    rt = t_time - s_time
-                    # store_rt(timestamp, rt)
-                    RFID += 1
-
-                except:
-                    error += 1
-
-                if use_tm == 1:
-                    time.sleep(exp[tmp_count])
-                    tmp_count += 1
-
-                else:
-                    time.sleep(1/i)  # send requests every 1s
+            try:
+                # Need modify ip if ip change
+                url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+                # change stage
+                post_url(timestamp, url, i, use_tm)
+            except:
+                error += 1
 
             timestamp += 1
-            event_mn1.clear()
-            event_mn2.clear()
             event_timestamp_Ccontrol.set()
-            # print("event_timestamp_Ccontrol")
 
     send_finish = 1
     final_time = time.time()
     alltime = final_time - start_time
     store_error_count(error)
     print('time:: ', alltime)
+
 
 
 def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event, service_name):

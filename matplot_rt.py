@@ -1,72 +1,66 @@
 import matplotlib.pyplot as plt
 import statistics
 
-# delay modify = average every x delay (x = 10, 50, 100)
-# request rate r
-# r = '100'
-simulation_time = 300  # 3602 s
+# r = 50
+# data_name = '_tm1'
+# data_name = str(r)
+simulation_time = 300  # 300 s
 
 # moving for plot
-moving_avg = 1
+moving_avg = 0  # choose avg delay
 move = 10
 
-# limit_cpus = 1
-# tmp_str = "result2/result_cpu" # result_1016/tm1
-tmp_dir = "all_result/result_0221"
+tmp_dir = "result3"
 path1 = tmp_dir + "/app_mn1_response.txt"
 path2 = tmp_dir + "/app_mn2_response.txt"
 
+# path2 = tmp_str + "/output30.txt"
+# path_list = [path1, path2, path3, path4]
+path_list = [path1, path2]
 service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
 
-# path_list = [path1]
-path_list = [path1, path2]
 
-def cal_cpu(f):
-    cpu = []
+def cal_delay(f, simulation_time):
     time = []
+    delay = []
+    # resource_cpu = []
+    #resource_replica = []
+
 
     for line in f:
         s = line.split(' ')
-        if float(s[2]) > 0 and float(s[2]) < 100:
-            # print(float(s[0]), float(s[2]))
 
-            time.append(float(s[0]))
-            cpu.append(float(s[2]))
-
-
+        try:
+            tmp = float(s[1].rstrip('\n'))
+            if tmp > 0 and tmp < 1:
+                time.append(float(s[0]))
+                delay.append(tmp * 1000)
+                # resource_cpu.append(float(s[2]))
+                # resource_replica.append(int(s[3]))
+        except:
+            print("error")
+            print(s[0])
     f.close()
+    # print(len(delay))
+    # delay = list(dict.fromkeys(delay))
+    # print(len(delay))
+    # choose data at after timestamp 300 -------
+    delay_ = [delay[i] for i in range(len(delay)) if time[i] >= 300]
+    avg = sum(delay_) / len(delay_)
+    max_d = max(delay_)
+    min_d = min(delay_)
+    st_dev = statistics.pstdev(delay_)
 
-    # calculate  cpu (ms) ---------------
-    # time_ = [time for time in time if time >= 300]
+    # avg = sum(delay) / len(delay)
+    # max_d = max(delay)
+    # min_d = min(delay)
+    # st_dev = statistics.pstdev(delay)
 
-    # tmp_use ---------------
-    # cpu_ = [cpu[i] for i in range(len(cpu)) if time[i] >= 300]
-    # # print(cpu_)
-    # avg = sum(cpu_) / len(cpu_)
-    # max_d = max(cpu_)
-    # min_d = min(cpu_)
-    # st_dev = statistics.pstdev(cpu_)
-
-    avg = sum(cpu) / len(cpu)
-    max_d = max(cpu)
-    min_d = min(cpu)
-    st_dev = statistics.pstdev(cpu)
     print(avg, max_d, min_d)
     print("st_dev: ", st_dev)
-    # tmp_use ---------------
-
-
-    # avg = sum(cpu) / len(cpu)
-    # max_d = max(cpu)
-    # min_d = min(cpu)
-    # print(avg, max_d, min_d)
-
-    # calculate  cpu (ms) ---------------
-    # print(len(time), len(cpu))
     x = []
-    y = cpu
-
     count = 0
+
     for i in range(simulation_time):
         r = time.count(i)
         if r > 0:
@@ -77,57 +71,55 @@ def cal_cpu(f):
         else:
             count += 1
 
-    # print(len(time), len(cpu))
-
+    y = delay
     if moving_avg:
-        cpu_m = []
-        for i in range(len(cpu)):
+        delay_m = []
+        for i in range(len(delay)):
             if i < move:
 
-                avg = sum(cpu[:i + 1]) / (i + 1)
+                avg = sum(delay[:i + 1]) / (i + 1)
             else:
-                avg = sum(cpu[i - move + 1:i + 1]) / move
+                avg = sum(delay[i - move + 1:i + 1]) / move
 
-            cpu_m.append(avg)
-        y = cpu_m
+            delay_m.append(avg)
 
+        y = delay_m
 
-    return time, y
+    return x, y
 
-
-# Plot --------------------------------------
 
 def fig_add(x, y, label):
-    #plt.subplot(pos)
-    plt.plot(x, y, label=label)  # color=color
+    plt.plot(x, y, label=label)
 
-# pos = 141
+
 tmp_count = 0
 for p in path_list:
 
     f = open(p, "r")
-    x, y = cal_cpu(f)
+    x, y = cal_delay(f, simulation_time)
+    # print(len(x), len(y))
+    # print(x, y)
 
+    if tmp_count == 0:
+        Rmax = 20
+    else :
+        Rmax = 10
+
+    result = filter(lambda x: x > Rmax, y)
+    R1 = len(list(result)) / len(y)
+    print("Rmax violation: ", R1)
     # print(y)
 
-    ### plot delay
+    ### plot # service[tmp_count] for show service name
     fig_add(x, y, service[tmp_count])
     tmp_count += 1
-    # fig_add(x, y1, 'Machine2', 'blue')
-    # fig_add(x, y2, 'Machine2', 'blue')
-    # fig_add(x, y3, 'Machine2', 'blue')
-    # fig_add(x, y4, 'Machine2', 'blue')
-
-
 
 # plt.title("Test")
-
+plt.ylim(0, 100)
+plt.fill()
 plt.xlabel("timestamp")
-plt.ylabel("Cpu utilization(%) ")
+plt.ylabel("Responese time(ms)")
 plt.grid(True)
 plt.legend()
-plt.xlim(0, simulation_time)
-plt.ylim(0, 110)
-plt.savefig("Cpu_utilization.png")
-plt.tight_layout()
+plt.savefig("Responese_time.png")
 plt.show()
