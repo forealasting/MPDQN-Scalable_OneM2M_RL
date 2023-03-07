@@ -160,7 +160,7 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_avg_cpu = statistics.median(cpu[-5:])
+            last_avg_cpu = statistics.mean(cpu[-5:])
             f.close()
 
             return last_avg_cpu

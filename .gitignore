@@ -6,6 +6,7 @@ all_result/
 dqn_result/
 static_result/
 dqn_result1/
+dqn_result2/
 # py
 
 q.py 

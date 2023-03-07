@@ -18,6 +18,7 @@ from IPython.display import clear_output
 import os
 import datetime
 import concurrent.futures
+import math
 print(datetime.datetime.now())
 
 # request rate r
@@ -176,7 +177,7 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_avg_cpu = statistics.median(cpu[-5:])
+            last_avg_cpu = statistics.mean(cpu[-5:])
             f.close()
 
             return last_avg_cpu
@@ -254,8 +255,8 @@ class Env:
         if median_response_time < t_max:
             c_perf = 0
         else:
-            tmp_d = 1.4 ** (50 / t_max)
-            tmp_n = 1.4 ** (Rt / t_max)
+            tmp_d = math.exp(50 / t_max)
+            tmp_n = math.exp(Rt / t_max)
             c_perf = tmp_n / tmp_d
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
@@ -271,8 +272,12 @@ class Env:
         # cost function
         w_pref = 0.5
         w_res = 0.5
+        c_perf = 0 + ((c_perf - math.exp(-2))/(1 - math.exp(-2)))*(1-0)
+        reward_perf = -(w_pref * c_perf)
+        reward_res = -(w_res * c_res)
         reward = -(w_pref * c_perf + w_res * c_res)
-        return next_state, reward
+        return next_state, reward, reward_perf, reward_res
+
 
 class ReplayBuffer:
     """A simple numpy replay buffer."""
@@ -409,7 +414,7 @@ class DQNAgent:
     def step(self, action: np.ndarray, event,  done: bool) -> Tuple[np.ndarray, np.float64]:
         """Take an action and return the response of the env."""
         # next_state, reward, done, _ = self.env.step(action)
-        next_state, reward = self.env.step(action, event,  done)
+        next_state, reward, reward_perf, reward_res = self.env.step(action, event,  done)
         if not self.is_test:
             self.transition += [reward, next_state, done]
             self.memory.store(*self.transition)
@@ -472,7 +477,7 @@ class DQNAgent:
                         done = False
                     next_state, reward = self.step(action, event, done)
                     # if self.env.service_name == "app_mn1":
-                    print("service name:", self.env.service_name, "action: ", action," step: ", step, action, " next_state: ",
+                    print("service name:", self.env.service_name, "action: ", action, " step: ", step, action, " next_state: ",
                           next_state, " reward: ", reward, " done: ", done)
                     store_trajectory(self.env.service_name, step, state, action, reward, next_state, done)
                     state = next_state
