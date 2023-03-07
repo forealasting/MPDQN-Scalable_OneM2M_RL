@@ -13,7 +13,7 @@ import concurrent.futures
 print(datetime.datetime.now())
 
 # request rate r
-data_rate = 50      # if not use_tm
+data_rate = 30      # if not use_tm
 use_tm = 0  # if use_tm
 
 # initial setting (threshold setting) # no use now
@@ -138,13 +138,13 @@ class Env:
         url = self.url_list[service_name_list.index(self.service_name)]
         try:
             start = time.time()
-            response = requests.post(url, headers=headers, json=data, timeout=0.5)
+            response = requests.post(url, headers=headers, json=data, timeout=0.1)
             end = time.time()
             response_time = end - start
         except requests.exceptions.Timeout:
             response = "timeout"
-            response_time = 0.5
-        data1 = str(timestamp) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
+            response_time = 0.1
+        data1 = str(timestamp) + ' ' + str(response) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
         f1.write(data1)
         f1.close()
         return response_time
@@ -424,13 +424,13 @@ def post(url):
 
     s_time = time.time()
     try:
-        response = requests.post(url1, headers=headers, json=data, timeout=0.5)
+        response = requests.post(url1, headers=headers, json=data, timeout=0.1)
         # response = requests.post(url1, headers=headers, json=data)
         rt = time.time() - s_time
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
-        rt = 0.5
+        rt = 0.1
 
     return response, rt
 
@@ -475,9 +475,7 @@ def send_request(stage, request_num, start_time, total_episodes):
         send_finish = 0
         timestamp = 0
         for i in request_num:
-            event_timestamp_Ccontrol.clear()
             # print("timestamp: ", timestamp)
-            tmp_count = 0
             # if change == 1:
             event_mn1.clear()
             event_mn2.clear()
@@ -486,6 +484,7 @@ def send_request(stage, request_num, start_time, total_episodes):
                 event_mn1.wait()
                 event_mn2.wait()
                 change = 0
+            event_timestamp_Ccontrol.clear()
             try:
                 # Need modify ip if ip change
                 url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"

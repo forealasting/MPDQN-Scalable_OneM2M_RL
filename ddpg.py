@@ -28,7 +28,7 @@ result_dir = "./dqn_result2/"
 # initial setting (threshold setting) # no use now
 # T_max = 0.065  # t_max violation
 # T_min = 0.055
-# set_tmin = 1  # 1 if setting tmin
+set_tmin = 1  # 1 if setting tmin
 # cpus = 0.5  # initial cpus
 # replicas = 1  # initial replica
 
@@ -63,33 +63,19 @@ Rmax_mn2 = 15
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 8       # Total episodes
+total_episodes = 4       # Total episodes
 learning_rate = 0.01          # Learning rate
 # max_steps = 50               # Max steps per episode
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
 min_epsilon = 0.1
-epsilon_decay = 1/480
+epsilon_decay = 1/120
 memory_size = 100
 batch_size = 8
 target_update = 100
 
-# check result directory
-if os.path.exists(result_dir):
-    print("Deleting existing result directory...")
-    raise SystemExit  # end process
 
-# build dir
-os.mkdir(result_dir)
-# store setting
-path = result_dir + "setting.txt"
-f = open(path, 'a')
-data = 'data_rate: ' + str(datetime.datetime.now()) + '\n'
-data += 'use_tm: ' + str(use_tm) + '\n'
-data += 'simulation_time ' + str(simulation_time) + '\n'
-f.write(data)
-f.close()
 
 
 ## 7/8 stage
@@ -109,6 +95,16 @@ else:
 
 print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
 
+
+
+
+# check result directory
+if os.path.exists(result_dir):
+    print("Deleting existing result directory...")
+    raise SystemExit  # end process
+
+# build dir
+os.mkdir(result_dir)
 
 class Env:
 
@@ -154,13 +150,12 @@ class Env:
         try:
             start = time.time()
             response = requests.post(url, headers=headers, json=data, timeout=0.1)
-            response = response.status_code
             end = time.time()
             response_time = end - start
         except requests.exceptions.Timeout:
             response = "timeout"
             response_time = 0.1
-        data1 = str(timestamp) + ' ' + str(response) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
+        data1 = str(timestamp) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
         f1.write(data1)
         f1.close()
         return response_time
@@ -229,7 +224,7 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(10)
+        time.sleep(5)
         for i in range(5):
             time.sleep(3)
             response_time_list.append(self.get_response_time())
@@ -278,11 +273,12 @@ class ReplayBuffer:
     """A simple numpy replay buffer."""
 
     def __init__(self, obs_dim: int, size: int, batch_size: int = 32):
+        """Initializate."""
         self.obs_buf = np.zeros([size, obs_dim], dtype=np.float32)
         self.next_obs_buf = np.zeros([size, obs_dim], dtype=np.float32)
         self.acts_buf = np.zeros([size], dtype=np.float32)
         self.rews_buf = np.zeros([size], dtype=np.float32)
-        self.done_buf = np.zeros(size, dtype=np.float32)
+        self.done_buf = np.zeros([size], dtype=np.float32)
         self.max_size, self.batch_size = size, batch_size
         self.ptr, self.size, = 0, 0
 
@@ -294,6 +290,7 @@ class ReplayBuffer:
         next_obs: np.ndarray,
         done: bool,
     ):
+        """Store the transition in buffer."""
         self.obs_buf[self.ptr] = obs
         self.next_obs_buf[self.ptr] = next_obs
         self.acts_buf[self.ptr] = act
@@ -303,6 +300,7 @@ class ReplayBuffer:
         self.size = min(self.size + 1, self.max_size)
 
     def sample_batch(self) -> Dict[str, np.ndarray]:
+        """Randomly sample a batch of experiences from memory."""
         idxs = np.random.choice(self.size, size=self.batch_size, replace=False)
         return dict(obs=self.obs_buf[idxs],
                     next_obs=self.next_obs_buf[idxs],
@@ -313,52 +311,146 @@ class ReplayBuffer:
     def __len__(self) -> int:
         return self.size
 
+class OUNoise:
+    """Ornstein-Uhlenbeck process.
+    Taken from Udacity deep-reinforcement-learning github repository:
+    https://github.com/udacity/deep-reinforcement-learning/blob/master/
+    ddpg-pendulum/ddpg_agent.py
+    """
 
-class Network(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int):
-        """Initialization."""
-        super(Network, self).__init__()
+    def __init__(
+        self,
+        size: int,
+        mu: float = 0.0,
+        theta: float = 0.15,
+        sigma: float = 0.2,
+    ):
+        """Initialize parameters and noise process."""
+        self.state = np.float64(0.0)
+        self.mu = mu * np.ones(size)
+        self.theta = theta
+        self.sigma = sigma
+        self.reset()
 
-        self.layers = nn.Sequential(
-            nn.Linear(in_dim, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-            nn.Linear(64, out_dim)
+    def reset(self):
+        """Reset the internal state (= noise) to mean (mu)."""
+        self.state = copy.copy(self.mu)
+
+    def sample(self) -> np.ndarray:
+        """Update internal state and return it as a noise sample."""
+        x = self.state
+        dx = self.theta * (self.mu - x) + self.sigma * np.array(
+            [random.random() for _ in range(len(x))]
         )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward method implementation."""
-        return self.layers(x)
+        self.state = x + dx
+        return self.state
 
 
-class DQNAgent:
+class Actor(nn.Module):
     def __init__(
             self,
-            env,  # need change
+            in_dim: int,
+            out_dim: int,
+            init_w: float = 3e-3,
+    ):
+        """Initialize."""
+        super(Actor, self).__init__()
+
+        self.hidden1 = nn.Linear(in_dim, 128)
+        self.hidden2 = nn.Linear(128, 128)
+        self.out = nn.Linear(128, out_dim)
+
+        self.out.weight.data.uniform_(-init_w, init_w)
+        self.out.bias.data.uniform_(-init_w, init_w)
+
+    def forward(self, state: torch.Tensor) -> torch.Tensor:
+        """Forward method implementation."""
+        x = F.relu(self.hidden1(state))
+        x = F.relu(self.hidden2(x))
+        action = self.out(x).tanh()
+
+        return action
+
+
+class Critic(nn.Module):
+    def __init__(
+            self,
+            in_dim: int,
+            init_w: float = 3e-3,
+    ):
+        """Initialize."""
+        super(Critic, self).__init__()
+
+        self.hidden1 = nn.Linear(in_dim, 128)
+        self.hidden2 = nn.Linear(128, 128)
+        self.out = nn.Linear(128, 1)
+
+        self.out.weight.data.uniform_(-init_w, init_w)
+        self.out.bias.data.uniform_(-init_w, init_w)
+
+    def forward(
+            self, state: torch.Tensor, action: torch.Tensor
+    ) -> torch.Tensor:
+        """Forward method implementation."""
+        x = torch.cat((state, action), dim=-1)
+        x = F.relu(self.hidden1(x))
+        x = F.relu(self.hidden2(x))
+        value = self.out(x)
+
+        return value
+
+
+class DDPGAgent:
+    """DDPGAgent interacting with environment.
+
+    Attribute:
+        env (gym.Env): openAI Gym environment
+        actor (nn.Module): target actor model to select actions
+        actor_target (nn.Module): actor model to predict next actions
+        actor_optimizer (Optimizer): optimizer for training actor
+        critic (nn.Module): critic model to predict state values
+        critic_target (nn.Module): target critic model to predict state values
+        critic_optimizer (Optimizer): optimizer for training critic
+        memory (ReplayBuffer): replay memory to store transitions
+        batch_size (int): batch size for sampling
+        gamma (float): discount factor
+        tau (float): parameter for soft target update
+        initial_random_steps (int): initial random action steps
+        noise (OUNoise): noise generator for exploration
+        device (torch.device): cpu / gpu
+        transition (list): temporory storage for the recent transition
+        total_step (int): total step numbers
+        is_test (bool): flag to show the current mode (train / test)
+    """
+
+    def __init__(
+            self,
+            env: gym.Env,
             memory_size: int,
             batch_size: int,
-            target_update: int,
-            epsilon_decay: float,
-            max_epsilon: float = 1.0,
-            min_epsilon: float = 0.1,
-            gamma: float = 0.9,
+            ou_noise_theta: float,
+            ou_noise_sigma: float,
+            gamma: float = 0.99,
+            tau: float = 5e-3,
+            initial_random_steps: int = 1e4,
     ):
-
-        # obs_dim = env.observation_space.shape[0]
-        # action_dim = env.action_space.n
-        obs_dim = 3  # S = {k, u , c}  # S = {k, u , c, r}
-        action_dim = 5  # 𝐴={−𝑟, −1,  0,  1,  𝑟}
+        """Initialize."""
+        obs_dim = env.observation_space.shape[0]
+        action_dim = env.action_space.shape[0]
 
         self.env = env
         self.memory = ReplayBuffer(obs_dim, memory_size, batch_size)
         self.batch_size = batch_size
-        self.epsilon = max_epsilon
-        self.epsilon_decay = epsilon_decay
-        self.max_epsilon = max_epsilon
-        self.min_epsilon = min_epsilon
-        self.target_update = target_update
         self.gamma = gamma
+        self.tau = tau
+        self.initial_random_steps = initial_random_steps
+
+        # noise
+        self.noise = OUNoise(
+            action_dim,
+            theta=ou_noise_theta,
+            sigma=ou_noise_sigma,
+        )
 
         # device: cpu / gpu
         self.device = torch.device(
@@ -366,157 +458,135 @@ class DQNAgent:
         )
         print(self.device)
 
-        # networks: dqn, dqn_target
-        self.dqn = Network(obs_dim, action_dim).to(self.device)
-        self.dqn_target = Network(obs_dim, action_dim).to(self.device)
-        self.dqn_target.load_state_dict(self.dqn.state_dict())
-        self.dqn_target.eval()
+        # networks
+        self.actor = Actor(obs_dim, action_dim).to(self.device)
+        self.actor_target = Actor(obs_dim, action_dim).to(self.device)
+        self.actor_target.load_state_dict(self.actor.state_dict())
+
+        self.critic = Critic(obs_dim + action_dim).to(self.device)
+        self.critic_target = Critic(obs_dim + action_dim).to(self.device)
+        self.critic_target.load_state_dict(self.critic.state_dict())
 
         # optimizer
-        self.optimizer = optim.Adam(self.dqn.parameters(), lr=0.01)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-3)
 
         # transition to store in memory
         self.transition = list()
+
+        # total steps count
+        self.total_step = 0
 
         # mode: train / test
         self.is_test = False
 
     def select_action(self, state: np.ndarray) -> np.ndarray:
         """Select an action from the input state."""
-        available_actions = self.get_available_actions(state)
-        action_mask = np.isin(range(5), available_actions)
-        selected_action_idx = np.where(action_mask)[0]  # find True index
-
-        # epsilon greedy policy
-        if self.epsilon > np.random.random():
-            print("random action")
-            selected_action = np.random.choice(selected_action_idx)
+        # if initial random action should be conducted
+        if self.total_step < self.initial_random_steps and not self.is_test:
+            selected_action = self.env.action_space.sample()
         else:
-            q_values = self.dqn(torch.FloatTensor(state).to(self.device))
-            print(q_values)
-            masked_q_values = torch.where(
-                torch.BoolTensor(action_mask).to(self.device),
-                q_values,
-                torch.tensor(-np.inf).to(self.device)
-            )
-            selected_action = masked_q_values.argmax()
-        selected_action = selected_action.item()
+            selected_action = self.actor(
+                torch.FloatTensor(state).to(self.device)
+            ).detach().cpu().numpy()
+
+        # add noise for exploration during training
         if not self.is_test:
-            self.transition = [state, selected_action]
+            noise = self.noise.sample()
+            selected_action = np.clip(selected_action + noise, -1.0, 1.0)
+
+        self.transition = [state, selected_action]
 
         return selected_action
 
-    def step(self, action: np.ndarray, event,  done: bool) -> Tuple[np.ndarray, np.float64]:
+    def step(self, action: np.ndarray) -> Tuple[np.ndarray, np.float64, bool]:
         """Take an action and return the response of the env."""
-        # next_state, reward, done, _ = self.env.step(action)
-        next_state, reward = self.env.step(action, event,  done)
+        next_state, reward, done, _ = self.env.step(action)
+
         if not self.is_test:
             self.transition += [reward, next_state, done]
             self.memory.store(*self.transition)
 
-        return next_state, reward
+        return next_state, reward, done
 
-    def update_model(self) -> float:
+    def update_model(self) -> torch.Tensor:
         """Update the model by gradient descent."""
+        device = self.device  # for shortening the following lines
+
         samples = self.memory.sample_batch()
+        state = torch.FloatTensor(samples["obs"]).to(device)
+        next_state = torch.FloatTensor(samples["next_obs"]).to(device)
+        action = torch.FloatTensor(samples["acts"].reshape(-1, 1)).to(device)
+        reward = torch.FloatTensor(samples["rews"].reshape(-1, 1)).to(device)
+        done = torch.FloatTensor(samples["done"].reshape(-1, 1)).to(device)
 
-        loss = self._compute_dqn_loss(samples)
+        masks = 1 - done
+        next_action = self.actor_target(next_state)
+        next_value = self.critic_target(next_state, next_action)
+        curr_return = reward + self.gamma * next_value * masks
 
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-        return loss.item()
+        # train critic
+        values = self.critic(state, action)
+        critic_loss = F.mse_loss(values, curr_return)
 
-    def train(self, episodes: int, event,  plotting_interval: int = 200):
-        global timestamp, simulation_time, change, send_finish
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        self.critic_optimizer.step()
 
+        # train actor
+        actor_loss = -self.critic(state, self.actor(state)).mean()
+
+        self.actor_optimizer.zero_grad()
+        actor_loss.backward()
+        self.actor_optimizer.step()
+
+        # target update
+        self._target_soft_update()
+
+        return actor_loss.data.cpu(), critic_loss.data.cpu()
+
+    def train(self, num_frames: int, plotting_interval: int = 200):
         """Train the agent."""
         self.is_test = False
-        update_cnt = 0
-        epsilons = []
-        reward = 0
-        init_state = [1, 0.0, 0.5]
-        init_state = np.array(init_state, dtype=float)
-        step = 0
-        for episode in range(episodes):
-            state = init_state
-            done = False
-            losses = []
-            rewards = []
 
-            if self.env.service_name == "app_mn1":
-                print("service name:", self.env.service_name, " episode:", episode)
-            event_timestamp_Ccontrol.wait()
-            print("service name:", self.env.service_name, " episode:", episode)
-            while True:
-                # if training is ready
-                if len(self.memory) >= self.batch_size:
-                    # print("training")
-                    loss = self.update_model()
-                    losses.append(loss)
-                    store_loss(self.env.service_name, loss)
-                    update_cnt += 1
+        state = self.env.reset()
+        actor_losses = []
+        critic_losses = []
+        scores = []
+        score = 0
 
-                    # if hard update is needed
-                    if update_cnt % self.target_update == 0:
-                        self._target_hard_update()
+        for self.total_step in range(1, num_frames + 1):
+            action = self.select_action(state)
+            next_state, reward, done = self.step(action)
 
-                if timestamp == 0:
-                    done = False
-                event_timestamp_Ccontrol.wait()
-                if (((timestamp - 1) % 30) == 0) and (not done):
-                    action = self.select_action(state)
-                    if timestamp == (simulation_time - 1):
-                        done = True
-                    else:
-                        done = False
-                    next_state, reward = self.step(action, event, done)
-                    # if self.env.service_name == "app_mn1":
-                    print("service name:", self.env.service_name, "action: ", action," step: ", step, action, " next_state: ",
-                          next_state, " reward: ", reward, " done: ", done)
-                    store_trajectory(self.env.service_name, step, state, action, reward, next_state, done)
-                    state = next_state
+            state = next_state
+            score += reward
 
-                    # linearly decrease epsilon
-                    self.epsilon = max(
-                        self.min_epsilon, self.epsilon - (
-                                self.max_epsilon - self.min_epsilon
-                        ) * self.epsilon_decay
-                    )
-                    epsilons.append(self.epsilon)
+            # if episode ends
+            if done:
+                state = env.reset()
+                scores.append(score)
+                score = 0
 
-                    step += 1
-                    event_timestamp_Ccontrol.clear()
+            # if training is ready
+            if (
+                    len(self.memory) >= self.batch_size
+                    and self.total_step > self.initial_random_steps
+            ):
+                actor_loss, critic_loss = self.update_model()
+                actor_losses.append(actor_loss)
+                critic_losses.append(critic_loss)
 
-                if done:
-                    # state = self.env.reset()
-                    print("done")
-                    rewards.append(reward)
-                    break
+            # plotting
+            if self.total_step % plotting_interval == 0:
+                self._plot(
+                    self.total_step,
+                    scores,
+                    actor_losses,
+                    critic_losses,
+                )
 
-            # store_reward(self.env.service_name, avg_rewards)
-
-        torch.save(dqn, self.env.service_name + '.pth')
-
-
-    def get_available_actions(self, state):
-        # S ={k, u , c}
-        # k (replica): 1 ~ 3                          actual value : same
-        # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
-        # c (used cpus) : 0.1 0.2 ... 1               actual value : same
-        # action_space = ['-r', -1, 0, 1, 'r']        r : replica   1: cpus
-
-        actions = [0, 1, 2, 3, 4]  # action index
-        if state[0] == 1:
-            actions.remove(0)
-        if state[0] == 3:
-            actions.remove(4)
-        if state[2] == 0.5:
-            actions.remove(1)
-        if state[2] == 1:
-            actions.remove(3)
-
-        return actions
+        self.env.close()
 
     def test(self):
         """Test the agent."""
@@ -524,41 +594,62 @@ class DQNAgent:
 
         state = self.env.reset()
         done = False
-        reward = 0
+        score = 0
 
-        # frames = []
+        frames = []
+        while not done:
+            frames.append(self.env.render(mode="rgb_array"))
+            action = self.select_action(state)
+            next_state, reward, done = self.step(action)
 
-        print("reward: ", reward)
-        # self.env.close()
+            state = next_state
+            score += reward
 
+        print("score: ", score)
+        self.env.close()
 
+        return frames
 
-    def _compute_dqn_loss(self, samples: Dict[str, np.ndarray]) -> torch.Tensor:
-        """Return dqn loss."""
-        device = self.device  # for shortening the following lines
-        state = torch.FloatTensor(samples["obs"]).to(device)
-        next_state = torch.FloatTensor(samples["next_obs"]).to(device)
-        action = torch.LongTensor(samples["acts"].reshape(-1, 1)).to(device)
-        reward = torch.FloatTensor(samples["rews"].reshape(-1, 1)).to(device)
-        done = torch.FloatTensor(samples["done"].reshape(-1, 1)).to(device)
+    def _target_soft_update(self):
+        """Soft-update: target = tau*local + (1-tau)*target."""
+        tau = self.tau
 
-        # G_t   = r + gamma * v(s_{t+1})  if state != Terminal
-        #       = r                       otherwise
-        curr_q_value = self.dqn(state).gather(1, action)
-        next_q_value = self.dqn_target(
-            next_state
-        ).max(dim=1, keepdim=True)[0].detach()
-        mask = 1 - done
-        target = (reward + self.gamma * next_q_value * mask).to(self.device)
+        for t_param, l_param in zip(
+                self.actor_target.parameters(), self.actor.parameters()
+        ):
+            t_param.data.copy_(tau * l_param.data + (1.0 - tau) * t_param.data)
 
-        # calculate dqn loss
-        loss = F.smooth_l1_loss(curr_q_value, target)
+        for t_param, l_param in zip(
+                self.critic_target.parameters(), self.critic.parameters()
+        ):
+            t_param.data.copy_(tau * l_param.data + (1.0 - tau) * t_param.data)
 
-        return loss
+    def _plot(
+            self,
+            frame_idx: int,
+            scores: List[float],
+            actor_losses: List[float],
+            critic_losses: List[float],
+    ):
+        """Plot the training progresses."""
 
-    def _target_hard_update(self):
-        """Hard update: target <- local."""
-        self.dqn_target.load_state_dict(self.dqn.state_dict())
+        def subplot(loc: int, title: str, values: List[float]):
+            # print(type(loc), type(title), type(values))
+            plt.subplot(loc)
+            plt.title(title)
+            plt.plot(values)
+
+        subplot_params = [
+            (131, f"frame {frame_idx}. score: {np.mean(scores[-10:])}", scores),
+            (132, "actor_loss", actor_losses),
+            (133, "critic_loss", critic_losses),
+        ]
+
+        clear_output(True)
+        plt.figure(figsize=(30, 5))
+        for loc, title, values in subplot_params:
+            subplot(loc, title, values)
+        plt.show()
 
 def store_cpu(start_time, woker_name):
     global timestamp, cpus, change, reset_complete
@@ -708,7 +799,9 @@ def send_request(stage, request_num, start_time, total_episodes):
         send_finish = 0
         timestamp = 0
         for i in request_num:
+            event_timestamp_Ccontrol.clear()
             # print("timestamp: ", timestamp)
+            # if change == 1:
             event_mn1.clear()
             event_mn2.clear()
             if ((timestamp - 1) % 30) == 0:
@@ -716,7 +809,6 @@ def send_request(stage, request_num, start_time, total_episodes):
                 event_mn1.wait()
                 event_mn2.wait()
                 change = 0
-            event_timestamp_Ccontrol.clear()
             try:
                 # Need modify ip if ip change
                 url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
