@@ -22,9 +22,9 @@ import math
 print(datetime.datetime.now())
 
 # request rate r
-data_rate = 30      # if not use_tm
+data_rate = 50      # if not use_tm
 use_tm = 0  # if use_tm
-result_dir = "./dqn_result2/"
+result_dir = "./dqn_result3/"
 
 # initial setting (threshold setting) # no use now
 # T_max = 0.065  # t_max violation
@@ -86,7 +86,8 @@ os.mkdir(result_dir)
 # store setting
 path = result_dir + "setting.txt"
 f = open(path, 'a')
-data = 'data_rate: ' + str(datetime.datetime.now()) + '\n'
+data = 'date: ' + str(datetime.datetime.now()) + '\n'
+data += 'data_rate: ' + str(data_rate) + '\n'
 data += 'use_tm: ' + str(use_tm) + '\n'
 data += 'simulation_time ' + str(simulation_time) + '\n'
 f.write(data)
@@ -411,7 +412,7 @@ class DQNAgent:
 
         return selected_action
 
-    def step(self, action: np.ndarray, event,  done: bool) -> Tuple[np.ndarray, np.float64]:
+    def step(self, action: np.ndarray, event,  done: bool) -> Tuple[np.ndarray, np.float64, np.float64, np.float64]:
         """Take an action and return the response of the env."""
         # next_state, reward, done, _ = self.env.step(action)
         next_state, reward, reward_perf, reward_res = self.env.step(action, event,  done)
@@ -419,7 +420,7 @@ class DQNAgent:
             self.transition += [reward, next_state, done]
             self.memory.store(*self.transition)
 
-        return next_state, reward
+        return next_state, reward, reward_perf, reward_res
 
     def update_model(self) -> float:
         """Update the model by gradient descent."""
@@ -475,11 +476,11 @@ class DQNAgent:
                         done = True
                     else:
                         done = False
-                    next_state, reward = self.step(action, event, done)
+                    next_state, reward, reward_perf, reward_res = self.step(action, event, done)
                     # if self.env.service_name == "app_mn1":
                     print("service name:", self.env.service_name, "action: ", action, " step: ", step, action, " next_state: ",
                           next_state, " reward: ", reward, " done: ", done)
-                    store_trajectory(self.env.service_name, step, state, action, reward, next_state, done)
+                    store_trajectory(self.env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
                     state = next_state
 
                     # linearly decrease epsilon
@@ -625,12 +626,12 @@ def store_loss(service_name, loss):
     f.write(data)
 
 
-def store_trajectory(service_name, step, s, a, r, s_, done):
+def store_trajectory(service_name, step, s, a, r, r_perf, r_res, s_, done):
     path = result_dir + service_name + "_trajectory.txt"
     tmp_s = list(s)
     tmp_s_ = list(s_)
     f = open(path, 'a')
-    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
+    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
     f.write(data)
 
 

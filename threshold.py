@@ -9,7 +9,7 @@ import random
 import os
 
 # define result path
-result_dir = "./static_result/result34/"
+result_dir = "./static_result/result36/"
 
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
@@ -19,7 +19,7 @@ error_rate = 0.2   # 0.2/0.5
 
 ## initial
 request_num = []
-simulation_time = 3602  # 300 s  # 3600s
+simulation_time = 1000  # 300 s  # 3600s
 cpus = 1
 replica = 2
 

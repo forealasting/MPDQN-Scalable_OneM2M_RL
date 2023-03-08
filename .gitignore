@@ -5,8 +5,7 @@ result2/
 all_result/
 dqn_result/
 static_result/
-dqn_result1/
-dqn_result2/
+dqn_result/
 # py
 
 q.py 
