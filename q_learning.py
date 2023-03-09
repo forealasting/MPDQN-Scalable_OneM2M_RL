@@ -206,10 +206,10 @@ class Env:
                 change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
-        if action != '0':
-            if self.service_name == 'app_mn1':
-                time.sleep(10) # wait app_mn2 service start
-            time.sleep(30)  # wait service start
+
+        if self.service_name == 'app_mn1':
+            time.sleep(10) # wait app_mn2 service start
+        time.sleep(30)  # wait service start
 
         if not done:
             # print(self.service_name, "_done: ", done)
@@ -227,24 +227,21 @@ class Env:
             time.sleep(1)
             event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
-        median_response_time = statistics.median(response_time_list)
-        median_response_time = median_response_time*1000  # 0.05s -> 50ms
+        mean_response_time = statistics.mean(response_time_list)
+        mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
         t_max = 0
-        if median_response_time >= 50:
+        if mean_response_time >= 50:
             Rt = 50
         else:
-            Rt = median_response_time
+            Rt = mean_response_time
         if self.service_name == "app_mn1":
             t_max = Rmax_mn1
         elif self.service_name == "app_mn2":
             t_max = Rmax_mn2
 
-        if median_response_time < t_max:
-            c_perf = 0
-        else:
-            tmp_d = math.exp(50 / t_max)
-            tmp_n = math.exp(Rt / t_max)
-            c_perf = tmp_n / tmp_d
+        tmp_d = math.exp(50 / t_max)
+        tmp_n = math.exp(Rt / t_max)
+        c_perf = tmp_n / tmp_d
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
@@ -260,10 +257,11 @@ class Env:
         w_pref = 0.5
         w_res = 0.5
         c_perf = 0 + ((c_perf - math.exp(-2))/(1 - math.exp(-2)))*(1-0)
-        reward_perf = -(w_pref * c_perf)
-        reward_res = -(w_res * c_res)
-        reward = -(w_pref * c_perf + w_res * c_res)
+        reward_perf = w_pref * c_perf
+        reward_res = w_res * c_res
+        reward = -(reward_perf + reward_res)
         return next_state, reward, reward_perf, reward_res
+
 
 
 class QLearningTable:
@@ -395,11 +393,12 @@ def store_reward(service_name, reward):
     data = str(reward) + '\n'
     f.write(data)
 
-
-def store_trajectory(service_name, step, s, a, r, s_, done):
+def store_trajectory(service_name, step, s, a, r, r_perf, r_res, s_, done):
     path = result_dir + service_name + "_trajectory.txt"
+    tmp_s = list(s)
+    tmp_s_ = list(s_)
     f = open(path, 'a')
-    data = str(step) + ' ' + str(s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(s_)+ ' ' + str(done) + '\n'
+    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
     f.write(data)
 
 
@@ -560,10 +559,10 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
                 else:
                     done = False
 
-                next_state, reward = env.step(action, event, done)
+                next_state, reward, reward_perf, reward_res = env.step(action, event, done)
                 print(service_name, "action: ", action, " step: ", step, " next_state: ", next_state, " reward: ", reward, " done: ", done)
 
-                store_trajectory(service_name, step, state, action, reward, next_state, done)
+                store_trajectory(self.env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
                 rewards.append(reward)
                 # RL learn from this transition
                 RL.learn(state, action, reward, next_state, done)

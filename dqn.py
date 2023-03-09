@@ -215,10 +215,10 @@ class Env:
                 change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
-        if action != '0':
-            if self.service_name == 'app_mn1':
-                time.sleep(10) # wait app_mn2 service start
-            time.sleep(30)  # wait service start
+
+        if self.service_name == 'app_mn1':
+            time.sleep(10) # wait app_mn2 service start
+        time.sleep(30)  # wait service start
 
         if not done:
             # print(self.service_name, "_done: ", done)
@@ -236,24 +236,22 @@ class Env:
             time.sleep(1)
             event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
-        median_response_time = statistics.median(response_time_list)
-        median_response_time = median_response_time*1000  # 0.05s -> 50ms
+        mean_response_time = statistics.mean(response_time_list)
+        mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
         t_max = 0
-        if median_response_time >= 50:
+        if mean_response_time >= 50:
             Rt = 50
         else:
-            Rt = median_response_time
+            Rt = mean_response_time
         if self.service_name == "app_mn1":
             t_max = Rmax_mn1
         elif self.service_name == "app_mn2":
             t_max = Rmax_mn2
 
-        if median_response_time < t_max:
-            c_perf = 0
-        else:
-            tmp_d = math.exp(50 / t_max)
-            tmp_n = math.exp(Rt / t_max)
-            c_perf = tmp_n / tmp_d
+
+        tmp_d = math.exp(50 / t_max)
+        tmp_n = math.exp(Rt / t_max)
+        c_perf = tmp_n / tmp_d
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
@@ -269,9 +267,9 @@ class Env:
         w_pref = 0.5
         w_res = 0.5
         c_perf = 0 + ((c_perf - math.exp(-2))/(1 - math.exp(-2)))*(1-0)
-        reward_perf = -(w_pref * c_perf)
-        reward_res = -(w_res * c_res)
-        reward = -(w_pref * c_perf + w_res * c_res)
+        reward_perf = w_pref * c_perf
+        reward_res = w_res * c_res
+        reward = -(reward_perf + reward_res)
         return next_state, reward, reward_perf, reward_res
 
 
@@ -553,7 +551,7 @@ class DQNAgent:
         target = (reward + self.gamma * next_q_value * mask).to(self.device)
 
         # calculate dqn loss
-        loss = F.smooth_l1_loss(curr_q_value, target)
+        loss = F.mse_loss(curr_q_value, target)
 
         return loss
 
@@ -656,7 +654,6 @@ def post_url(url, RFID, content):
     except requests.exceptions.Timeout:
         response = "timeout"
 
-
     return response
 
 def send_request(stage, request_num, start_time, total_episodes):
@@ -694,10 +691,7 @@ def send_request(stage, request_num, start_time, total_episodes):
                         content = "false"
                     else:
                         content = "true"
-                    s_time = time.time()
                     response = post_url(url1, RFID, content)
-                    t_time = time.time()
-                    rt = t_time - s_time
                     RFID += 1
 
                 except:
