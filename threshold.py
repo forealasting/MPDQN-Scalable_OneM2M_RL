@@ -9,19 +9,19 @@ import random
 import os
 
 # define result path
-result_dir = "./static_result/result36/"
+result_dir = "./static_result/result87/"
 
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
-data_rate = 50  # use static request rate
-use_tm = 1  # use dynamic traffic
+data_rate = 30  # use static request rate
+use_tm = 0  # use dynamic traffic
 error_rate = 0.2   # 0.2/0.5
 
 ## initial
 request_num = []
-simulation_time = 1000  # 300 s  # 3600s
+simulation_time = 300  # 300 s  # 3600s
 cpus = 1
-replica = 2
+replica = 1
 
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -70,6 +70,14 @@ if use_tm:
 else:
     request_num = [data_rate for i in range(simulation_time)]
 
+
+# request_num = []
+# tmp = 10
+# for i in range(2):
+#     for j in range(100):
+#         request_num.append(tmp)
+#     tmp += 50
+# print(request_num[101])
 print('request_num:: ', len(request_num))
 
 
@@ -99,7 +107,7 @@ def post(url):
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
-        rt = 0.5
+        rt = 0.1
 
     return response, rt
 

@@ -213,9 +213,9 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(10)
+        time.sleep(20)
         for i in range(5):
-            time.sleep(3)
+            time.sleep(1)
             response_time_list.append(self.get_response_time())
 
         if done:

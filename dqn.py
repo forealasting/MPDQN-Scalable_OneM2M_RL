@@ -26,13 +26,6 @@ data_rate = 50      # if not use_tm
 use_tm = 0  # if use_tm
 result_dir = "./dqn_result3/"
 
-# initial setting (threshold setting) # no use now
-# T_max = 0.065  # t_max violation
-# T_min = 0.055
-# set_tmin = 1  # 1 if setting tmin
-# cpus = 0.5  # initial cpus
-# replicas = 1  # initial replica
-
 ## initial
 request_num = []
 # timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
@@ -66,7 +59,6 @@ Rmax_mn2 = 15
 # action_space = ['-r', -1, 0, 1, 'r']
 total_episodes = 8       # Total episodes
 learning_rate = 0.01          # Learning rate
-# max_steps = 50               # Max steps per episode
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
@@ -231,9 +223,9 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(10)
+        time.sleep(20)
         for i in range(5):
-            time.sleep(3)
+            time.sleep(1)
             response_time_list.append(self.get_response_time())
 
         if done:
@@ -600,8 +592,8 @@ def store_cpu(start_time, woker_name):
 
 # reset Environment
 def reset():
-    cmd1 = "sudo docker-machine ssh default docker service scale app_mn1=1"
-    cmd2 = "sudo docker-machine ssh default docker service scale app_mn2=1"
+    cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
+    cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
     cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn1"
     cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn2"
     subprocess.check_output(cmd1, shell=True)
