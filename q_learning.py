@@ -65,7 +65,7 @@ gamma = 0.9                 # Discounting rate
 max_epsilon = 1
 min_epsilon = 0.1
 epsilon_decay = 1/480
-
+RFID = 0
 ##  stage
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
@@ -410,13 +410,8 @@ def store_error_count(error):
     f.write(data)
 
 
-def post(url):
-    RFID = random.randint(0, 1000000)
+def post_url(url, RFID, content):
 
-    if error_rate > random.random():
-        content = "false"
-    else:
-        content = "true"
     headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
     data = {
         "m2m:cin": {
@@ -426,44 +421,14 @@ def post(url):
             "rn": str(RFID),
         }
     }
-    url1 = url + stage[random.randint(0, 7)]
-
-    s_time = time.time()
     try:
-        response = requests.post(url1, headers=headers, json=data, timeout=0.1)
-        # response = requests.post(url1, headers=headers, json=data)
-        rt = time.time() - s_time
+        response = requests.post(url, headers=headers, json=data, timeout=0.1)
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
-        rt = 0.1
 
-    return response, rt
+    return response
 
-
-def post_url(timestamp, url, rate, use_tm):
-
-    exp = np.random.exponential(scale=1 / rate, size=rate)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=rate) as executor:
-        tmp_count = 0
-        results = []
-
-        for i in range(rate):
-            # url1 = url + stage[(timestamp * 10 + tmp_count) % 8]
-            results.append(executor.submit(post, url))
-            if use_tm == 1:
-                time.sleep(exp[tmp_count])
-                tmp_count += 1
-            else:
-                time.sleep(1/rate)  # send requests every 1 / rate s
-
-        for result in concurrent.futures.as_completed(results):
-            response, response_time = result.result()
-            # print(type(response.status_code), response_time)
-            if response != "201":
-                # store_rt(response_time, response_time)
-                print(response)
-            # store_rt(timestamp, response, response_time)
 
 
 def send_request(stage, request_num, start_time, total_episodes):
