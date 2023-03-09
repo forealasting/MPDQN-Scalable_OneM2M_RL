@@ -146,9 +146,13 @@ class Env:
         except requests.exceptions.Timeout:
             response = "timeout"
             response_time = 0.1
+
         data1 = str(timestamp) + ' ' + str(response) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
         f1.write(data1)
         f1.close()
+        if response != '201':
+            response_time = 0.1
+
         return response_time
 
     def get_cpu_utilization(self):
@@ -217,7 +221,7 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(20)
+        time.sleep(25)
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -238,6 +242,7 @@ class Env:
             t_max = Rmax_mn1
         elif self.service_name == "app_mn2":
             t_max = Rmax_mn2
+
 
         tmp_d = math.exp(50 / t_max)
         tmp_n = math.exp(Rt / t_max)
@@ -261,6 +266,7 @@ class Env:
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
         return next_state, reward, reward_perf, reward_res
+
 
 
 
@@ -527,7 +533,7 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
                 next_state, reward, reward_perf, reward_res = env.step(action, event, done)
                 print(service_name, "action: ", action, " step: ", step, " next_state: ", next_state, " reward: ", reward, " done: ", done)
 
-                store_trajectory(self.env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
+                store_trajectory(env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
                 rewards.append(reward)
                 # RL learn from this transition
                 RL.learn(state, action, reward, next_state, done)
