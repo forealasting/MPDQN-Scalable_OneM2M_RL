@@ -14,7 +14,7 @@ import math
 print(datetime.datetime.now())
 
 # request rate r
-data_rate = 30      # if not use_tm
+data_rate = 50      # if not use_tm
 use_tm = 0  # if use_tm
 
 # initial setting (threshold setting) # no use now
@@ -150,7 +150,7 @@ class Env:
         data1 = str(timestamp) + ' ' + str(response) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
         f1.write(data1)
         f1.close()
-        if response != '201':
+        if str(response) != '201':
             response_time = 0.1
 
         return response_time
@@ -231,6 +231,7 @@ class Env:
             time.sleep(1)
             event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
+        print(response_time_list)
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
         t_max = 0
@@ -266,8 +267,6 @@ class Env:
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
         return next_state, reward, reward_perf, reward_res
-
-
 
 
 class QLearningTable:
@@ -544,6 +543,7 @@ def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, e
                 if done:
                     avg_rewards = sum(rewards)/len(rewards)
                     break
+                event_timestamp_Ccontrol.clear()
 
         store_reward(service_name, avg_rewards)
         all_rewards.append(avg_rewards)

@@ -159,7 +159,7 @@ class Env:
         data1 = str(timestamp) + ' ' + str(response) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
         f1.write(data1)
         f1.close()
-        if response != '201':
+        if str(response) != '201':
             response_time = 0.1
 
         return response_time
