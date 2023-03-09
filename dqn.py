@@ -24,7 +24,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 0  # if use_tm
-result_dir = "./dqn_result/dqn_result5/"
+result_dir = "./dqn_result/dqn_result4/"
 
 ## initial
 request_num = []
@@ -230,7 +230,7 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(25)
+        time.sleep(20)
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -239,8 +239,8 @@ class Env:
             # print(self.service_name, "_done: ", done)
             time.sleep(1)
             event.set()  # if done and after get_response_time
-        # avg_response_time = sum(response_time_list)/len(response_time_list)
-        print(response_time_list)
+        # mean_response_time = sum(response_time_list)/len(response_time_list)
+        # print(response_time_list)
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
         t_max = 0
@@ -271,7 +271,7 @@ class Env:
         # cost function
         w_pref = 0.5
         w_res = 0.5
-        c_perf = 0 + ((c_perf - math.exp(-2))/(1 - math.exp(-2)))*(1-0)
+        c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)

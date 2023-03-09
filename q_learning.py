@@ -262,7 +262,7 @@ class Env:
         # cost function
         w_pref = 0.5
         w_res = 0.5
-        c_perf = 0 + ((c_perf - math.exp(-2))/(1 - math.exp(-2)))*(1-0)
+        c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
