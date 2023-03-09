@@ -24,7 +24,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 0  # if use_tm
-result_dir = "./dqn_result3/"
+result_dir = "./dqn_result/dqn_result4/"
 
 ## initial
 request_num = []
@@ -43,6 +43,7 @@ RFID = 0  # random number for data
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
+
 # Need modify ip if ip change
 ip = "192.168.99.121"  # app_mn1
 ip1 = "192.168.99.122"  # app_mn2
@@ -215,6 +216,8 @@ class Env:
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
         if action != '0':
+            if self.service_name == 'app_mn1':
+                time.sleep(10) # wait app_mn2 service start
             time.sleep(30)  # wait service start
 
         if not done:
@@ -635,13 +638,9 @@ def store_error_count(error):
     f.write(data)
 
 
-def post(url):
-    RFID = random.randint(0, 1000000)
 
-    if error_rate > random.random():
-        content = "false"
-    else:
-        content = "true"
+def post_url(url, RFID, content):
+
     headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
     data = {
         "m2m:cin": {
@@ -651,45 +650,14 @@ def post(url):
             "rn": str(RFID),
         }
     }
-    url1 = url + stage[random.randint(0, 7)]
-
-    s_time = time.time()
     try:
-        response = requests.post(url1, headers=headers, json=data, timeout=0.1)
-        # response = requests.post(url1, headers=headers, json=data)
-        rt = time.time() - s_time
+        response = requests.post(url, headers=headers, json=data, timeout=0.1)
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
-        rt = 0.1
-
-    return response, rt
 
 
-def post_url(timestamp, url, rate, use_tm):
-
-    exp = np.random.exponential(scale=1 / rate, size=rate)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=rate) as executor:
-        tmp_count = 0
-        results = []
-
-        for i in range(rate):
-            # url1 = url + stage[(timestamp * 10 + tmp_count) % 8]
-            results.append(executor.submit(post, url))
-            if use_tm == 1:
-                time.sleep(exp[tmp_count])
-                tmp_count += 1
-            else:
-                time.sleep(1/rate)  # send requests every 1 / rate s
-
-        for result in concurrent.futures.as_completed(results):
-            response, response_time = result.result()
-            # print(type(response.status_code), response_time)
-            if response != "201":
-                # store_rt(response_time, response_time)
-                print(response)
-            # store_rt(timestamp, response, response_time)
-
+    return response
 
 def send_request(stage, request_num, start_time, total_episodes):
     global change, send_finish, reset_complete
@@ -715,13 +683,33 @@ def send_request(stage, request_num, start_time, total_episodes):
                 event_mn2.wait()
                 change = 0
             event_timestamp_Ccontrol.clear()
-            try:
-                # Need modify ip if ip change
-                url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-                # change stage
-                post_url(timestamp, url, i, use_tm)
-            except:
-                error += 1
+            exp = np.random.exponential(scale=1 / i, size=i)
+            tmp_count = 0
+            for j in range(i):
+                try:
+                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+                    # change stage
+                    url1 = url + stage[(tmp_count * 10 + j) % 8]
+                    if error_rate > random.random():
+                        content = "false"
+                    else:
+                        content = "true"
+                    s_time = time.time()
+                    response = post_url(url1, RFID, content)
+                    t_time = time.time()
+                    rt = t_time - s_time
+                    RFID += 1
+
+                except:
+                    print("eror")
+                    error += 1
+
+                if use_tm == 1:
+                    time.sleep(exp[tmp_count])
+                    tmp_count += 1
+
+                else:
+                    time.sleep(1 / i)  # send requests every 1s
 
             timestamp += 1
             event_timestamp_Ccontrol.set()

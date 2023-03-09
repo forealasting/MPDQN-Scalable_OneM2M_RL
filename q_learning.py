@@ -10,6 +10,7 @@ import copy
 import os
 import datetime
 import concurrent.futures
+import math
 print(datetime.datetime.now())
 
 # request rate r
@@ -139,6 +140,7 @@ class Env:
         try:
             start = time.time()
             response = requests.post(url, headers=headers, json=data, timeout=0.1)
+            response = response.status_code
             end = time.time()
             response_time = end - start
         except requests.exceptions.Timeout:
@@ -205,6 +207,8 @@ class Env:
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
         if action != '0':
+            if self.service_name == 'app_mn1':
+                time.sleep(10) # wait app_mn2 service start
             time.sleep(30)  # wait service start
 
         if not done:
@@ -238,8 +242,8 @@ class Env:
         if median_response_time < t_max:
             c_perf = 0
         else:
-            tmp_d = 1.4 ** (50 / t_max)
-            tmp_n = 1.4 ** (Rt / t_max)
+            tmp_d = math.exp(50 / t_max)
+            tmp_n = math.exp(Rt / t_max)
             c_perf = tmp_n / tmp_d
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
@@ -255,8 +259,11 @@ class Env:
         # cost function
         w_pref = 0.5
         w_res = 0.5
+        c_perf = 0 + ((c_perf - math.exp(-2))/(1 - math.exp(-2)))*(1-0)
+        reward_perf = -(w_pref * c_perf)
+        reward_res = -(w_res * c_res)
         reward = -(w_pref * c_perf + w_res * c_res)
-        return next_state, reward
+        return next_state, reward, reward_perf, reward_res
 
 
 class QLearningTable:
@@ -476,7 +483,6 @@ def send_request(stage, request_num, start_time, total_episodes):
         timestamp = 0
         for i in request_num:
             # print("timestamp: ", timestamp)
-            # if change == 1:
             event_mn1.clear()
             event_mn2.clear()
             if ((timestamp - 1) % 30) == 0:
@@ -485,13 +491,33 @@ def send_request(stage, request_num, start_time, total_episodes):
                 event_mn2.wait()
                 change = 0
             event_timestamp_Ccontrol.clear()
-            try:
-                # Need modify ip if ip change
-                url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-                # change stage
-                post_url(timestamp, url, i, use_tm)
-            except:
-                error += 1
+            exp = np.random.exponential(scale=1 / i, size=i)
+            tmp_count = 0
+            for j in range(i):
+                try:
+                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+                    # change stage
+                    url1 = url + stage[(tmp_count * 10 + j) % 8]
+                    if error_rate > random.random():
+                        content = "false"
+                    else:
+                        content = "true"
+                    s_time = time.time()
+                    response = post_url(url1, RFID, content)
+                    t_time = time.time()
+                    rt = t_time - s_time
+                    RFID += 1
+
+                except:
+                    print("eror")
+                    error += 1
+
+                if use_tm == 1:
+                    time.sleep(exp[tmp_count])
+                    tmp_count += 1
+
+                else:
+                    time.sleep(1 / i)  # send requests every 1s
 
             timestamp += 1
             event_timestamp_Ccontrol.set()
