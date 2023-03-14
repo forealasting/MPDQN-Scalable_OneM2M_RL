@@ -9,12 +9,12 @@ import random
 import os
 
 # define result path
-result_dir = "./static_result/result79/"
+result_dir = "./static_result/result60/"
 
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
 data_rate = 50  # use static request rate
-use_tm = 1  # use dynamic traffi4
+use_tm = 0  # use dynamic traffi4
 error_rate = 0.2   # 0.2/0.5
 
 ## initial
@@ -85,11 +85,10 @@ def post_url(url, RFID, content):
         }
     }
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=0.1)
+        response = requests.post(url, headers=headers, json=data, timeout=0.05)
         response = str(response.status_code)
     except requests.exceptions.Timeout:
-        response = "timeout"
-
+        response = 'timeout'
 
     return response
 
@@ -160,35 +159,35 @@ def store_rt2():
                 url = "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container"
                 try:
                     s_time = time.time()
-                    future = executor.submit(requests.post, url, headers=headers, json=data)
+                    future = executor.submit(requests.post, url, headers=headers, json=data, timeout=0.05)
                     response = future.result()
                     response_time1 = time.time() - s_time
                     response1 = str(response.status_code)
                 except requests.exceptions.Timeout:
-                    response1 = "timeout"
-                    response_time1 = 0.5
+                    response1 = 'timeout'
+                    response_time1 = 0.05
 
                 # # URL 2
                 try:
                     s_time = time.time()
-                    future = executor.submit(requests.post, "http://" + ip + ":1111/test", headers=headers, json=data)
+                    future = executor.submit(requests.post, "http://" + ip + ":1111/test", headers=headers, json=data, timeout=0.05)
                     response = future.result()
                     response_time2 = time.time() - s_time
                     response2 = str(response.status_code)
                 except requests.exceptions.Timeout:
-                    response2 = "timeout"
-                    response_time1 = 0.5
+                    response2 = 'timeout'
+                    response_time1 = 0.05
 
                 # # URL 3
                 try:
                     s_time = time.time()
-                    future = executor.submit(requests.post, "http://" + ip1 + ":2222/test", headers=headers, json=data)
+                    future = executor.submit(requests.post, "http://" + ip1 + ":2222/test", headers=headers, json=data, timeout=0.05)
                     response = future.result()
                     response_time3 = time.time() - s_time
                     response3 = str(response.status_code)
                 except requests.exceptions.Timeout:
-                    response3 = "timeout"
-                    response_time3 = 0.5
+                    response3 = 'timeout'
+                    response_time3 = 0.05
 
                 data1 = str(timestamp) + ' ' + str(response1) + ' ' + str(response_time1) + '\n'
                 data2 = str(timestamp) + ' ' + str(response2) + ' ' + str(response_time2) + '\n'

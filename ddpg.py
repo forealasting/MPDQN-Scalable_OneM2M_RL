@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-
+import math
+import copy
 import requests
 import time
 import threading
@@ -75,7 +76,9 @@ memory_size = 100
 batch_size = 8
 target_update = 100
 
-
+seed = 777
+torch.manual_seed(seed)
+np.random.seed(seed)
 
 
 ## 7/8 stage
@@ -149,15 +152,20 @@ class Env:
         url = self.url_list[service_name_list.index(self.service_name)]
         try:
             start = time.time()
-            response = requests.post(url, headers=headers, json=data, timeout=0.1)
+            response = requests.post(url, headers=headers, json=data, timeout=0.05)
+            response = response.status_code
             end = time.time()
             response_time = end - start
         except requests.exceptions.Timeout:
             response = "timeout"
-            response_time = 0.1
-        data1 = str(timestamp) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
+            response_time = 0.05
+
+        data1 = str(timestamp) + ' ' + str(response) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
         f1.write(data1)
         f1.close()
+        if str(response) != '201':
+            response_time = 0.05
+
         return response_time
 
     def get_cpu_utilization(self):
@@ -171,7 +179,7 @@ class Env:
                 time.append(float(s[0]))
                 cpu.append(float(s[2]))
 
-            last_avg_cpu = statistics.median(cpu[-5:])
+            last_avg_cpu = statistics.mean(cpu[-5:])
             f.close()
 
             return last_avg_cpu
@@ -215,8 +223,10 @@ class Env:
                 change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
-        if action != '0':
-            time.sleep(30)  # wait service start
+
+        if self.service_name == 'app_mn1':
+            time.sleep(10) # wait app_mn2 service start
+        time.sleep(30)  # wait service start
 
         if not done:
             # print(self.service_name, "_done: ", done)
@@ -224,39 +234,42 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(5)
+        time.sleep(25)
         for i in range(5):
-            time.sleep(3)
+            time.sleep(1)
             response_time_list.append(self.get_response_time())
 
         if done:
             # print(self.service_name, "_done: ", done)
             time.sleep(1)
             event.set()  # if done and after get_response_time
-        # avg_response_time = sum(response_time_list)/len(response_time_list)
-        median_response_time = statistics.median(response_time_list)
-        median_response_time = median_response_time*1000  # 0.05s -> 50ms
+        # mean_response_time = sum(response_time_list)/len(response_time_list)
+        # print(response_time_list)
+        mean_response_time = statistics.mean(response_time_list)
+        mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
         t_max = 0
-        if median_response_time >= 50:
+        if mean_response_time >= 50:
             Rt = 50
         else:
-            Rt = median_response_time
+            Rt = mean_response_time
         if self.service_name == "app_mn1":
             t_max = Rmax_mn1
         elif self.service_name == "app_mn2":
             t_max = Rmax_mn2
 
-        if median_response_time < t_max:
-            c_perf = 0
-        else:
-            tmp_d = 1.4 ** (50 / t_max)
-            tmp_n = 1.4 ** (Rt / t_max)
-            c_perf = tmp_n / tmp_d
+        tmp_d = math.exp(50 / t_max)
+        tmp_n = math.exp(Rt / t_max)
+        c_perf = tmp_n / tmp_d
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
         # k, u, c # r
         self.cpu_utilization = self.get_cpu_utilization()
+        path = result_dir + self.service_name + "_agent_get_cpu.txt"
+        f1 = open(path, 'a')
+        data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
+        f1.write(data)
+        f1.close()
         u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
         next_state.append(u/10)
@@ -266,8 +279,15 @@ class Env:
         # cost function
         w_pref = 0.5
         w_res = 0.5
-        reward = -(w_pref * c_perf + w_res * c_res)
-        return next_state, reward
+        # normalize
+        c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
+        c_res = 0 + ((c_res - (1/6))/(1 - (1/6))) * (1 - 0)
+        if mean_response_time < t_max:
+            c_perf = 0
+        reward_perf = w_pref * c_perf
+        reward_res = w_res * c_res
+        reward = -(reward_perf + reward_res)
+        return next_state, reward, reward_perf, reward_res
 
 class ReplayBuffer:
     """A simple numpy replay buffer."""

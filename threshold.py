@@ -9,24 +9,25 @@ import random
 import os
 
 # define result path
-result_dir = "./static_result/result72/"
+result_dir = "./static_result/result58/"
+
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
 data_rate = 50  # use static request rate
-use_tm = 0  # use dynamic traffic
-error_rate = 1   # 0.2/0.5
+use_tm = 0  # use dynamic traffi4
+error_rate = 0.2   # 0.2/0.5
 
 ## initial
 request_num = []
-simulation_time = 30  # 300 s  # 3600s
-cpus = 0.99
-replica = 1
+simulation_time = 100  # 300 s  # 3600s
+cpus = 0.5
+replica = 2
 
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
 send_finish = 0
 timestamp = 0
-
+RFID = 0
 
 ip = "192.168.99.121"  # app_mn1
 ip1 = "192.168.99.122"  # app_mn2
@@ -69,24 +70,11 @@ if use_tm:
 else:
     request_num = [data_rate for i in range(simulation_time)]
 
-
-# request_num = []
-# tmp = 10
-# for i in range(2):
-#     for j in range(30):
-#         request_num.append(tmp)
-#     tmp += 50
-
 print('request_num:: ', len(request_num))
 
 
-def post(url):
-    RFID = random.randint(0, 1000000)
+def post_url(url, RFID, content):
 
-    if error_rate > random.random():
-        content = "false"
-    else:
-        content = "true"
     headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
     data = {
         "m2m:cin": {
@@ -96,46 +84,13 @@ def post(url):
             "rn": str(RFID),
         }
     }
-    url1 = url + stage[random.randint(0, 7)]
-
-    s_time = time.time()
     try:
-        response = requests.post(url1, headers=headers, json=data, timeout=0.1)
-        # response = requests.post(url1, headers=headers, json=data)
-        rt = time.time() - s_time
+        response = requests.post(url, headers=headers, json=data, timeout=0.05)
         response = str(response.status_code)
     except requests.exceptions.Timeout:
-        response = "timeout"
-        rt = 0.1
+        response = 'timeout'
 
-    return response, rt
-
-
-def post_url(timestamp, url, rate, use_tm):
-
-    exp = np.random.exponential(scale=1 / rate, size=rate)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=rate) as executor:
-        tmp_count = 0
-        results = []
-
-        for i in range(rate):
-            # url1 = url + stage[(timestamp * 10 + tmp_count) % 8]
-            results.append(executor.submit(post, url))
-            if use_tm == 1:
-                time.sleep(exp[tmp_count])
-                tmp_count += 1
-            else:
-                time.sleep(1/rate)  # send requests every 1 / rate s
-
-
-        for result in concurrent.futures.as_completed(results):
-            response, response_time = result.result()
-            # print(type(response.status_code), response_time)
-            if response != "201":
-                # store_rt(response_time, response_time)
-                print(response)
-            store_rt(timestamp, response, response_time)
-
+    return response
 
 
 def store_cpu(start_time, woker_name):
@@ -204,35 +159,35 @@ def store_rt2():
                 url = "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container"
                 try:
                     s_time = time.time()
-                    future = executor.submit(requests.post, url, headers=headers, json=data)
+                    future = executor.submit(requests.post, url, headers=headers, json=data, timeout=0.05)
                     response = future.result()
                     response_time1 = time.time() - s_time
                     response1 = str(response.status_code)
                 except requests.exceptions.Timeout:
-                    response1 = "timeout"
-                    response_time1 = 0.5
+                    response1 = 'timeout'
+                    response_time1 = 0.05
 
                 # # URL 2
                 try:
                     s_time = time.time()
-                    future = executor.submit(requests.post, "http://" + ip + ":1111/test", headers=headers, json=data)
+                    future = executor.submit(requests.post, "http://" + ip + ":1111/test", headers=headers, json=data, timeout=0.05)
                     response = future.result()
                     response_time2 = time.time() - s_time
                     response2 = str(response.status_code)
                 except requests.exceptions.Timeout:
-                    response2 = "timeout"
-                    response_time1 = 0.5
+                    response2 = 'timeout'
+                    response_time1 = 0.05
 
                 # # URL 3
                 try:
                     s_time = time.time()
-                    future = executor.submit(requests.post, "http://" + ip1 + ":2222/test", headers=headers, json=data)
+                    future = executor.submit(requests.post, "http://" + ip1 + ":2222/test", headers=headers, json=data, timeout=0.05)
                     response = future.result()
                     response_time3 = time.time() - s_time
                     response3 = str(response.status_code)
                 except requests.exceptions.Timeout:
-                    response3 = "timeout"
-                    response_time3 = 0.5
+                    response3 = 'timeout'
+                    response_time3 = 0.05
 
                 data1 = str(timestamp) + ' ' + str(response1) + ' ' + str(response_time1) + '\n'
                 data2 = str(timestamp) + ' ' + str(response2) + ' ' + str(response_time2) + '\n'
@@ -253,24 +208,41 @@ def send_request(url, stage, request_num, start_time):
     global change, send_finish
     global timestamp, use_tm, RFID
 
+    error = 0
+
     for i in request_num:
 
-        #print(i, timestamp)
+        print("timestamp: ", timestamp)
+        exp = np.random.exponential(scale=1 / i, size=i)
+        tmp_count = 0
+        for j in range(i):
+            try:
+                # change stage
+                url1 = url + stage[(tmp_count * 10 + j) % 8]
+                if error_rate > random.random():
+                    content = "false"
+                else:
+                    content = "true"
+                s_time = time.time()
+                response = post_url(url1, RFID, content)
+                # print(response)
+                t_time = time.time()
+                rt = t_time - s_time
+                store_rt(timestamp, response, rt)
+                RFID += 1
 
-        if change == 1:
-            print('change!')
-            time.sleep(60)
-            change = 0
-        try:
-            post_url(timestamp, url, i, use_tm)
+            except:
+                print("eror")
+                error += 1
 
-        except:
-            f1 = open("error.txt", 'a')
-            f1.close()
-            print('Cant Send Request!')
+            if use_tm == 1:
+                time.sleep(exp[tmp_count])
+                tmp_count += 1
+
+            else:
+                time.sleep(1 / i)  # send requests every 1s
 
         timestamp += 1
-
 
     final_time = time.time()
     alltime = final_time - start_time
@@ -278,7 +250,7 @@ def send_request(url, stage, request_num, start_time):
     send_finish = 1
 
 
-def manual_action():
+def threshold_action():
     global cpus, T_max, type, change, send_finish, replicas
     global timestamp
 
@@ -315,21 +287,17 @@ t1 = threading.Thread(target=send_request, args=(url, stage, request_num, start_
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
 t4 = threading.Thread(target=store_rt2)
-# t7 = threading.Thread(target=manual_action)
+t5 = threading.Thread(target=threshold_action)
 
 t1.start()
 t2.start()
 t3.start()
 t4.start()
-# t5.start()
-# t6.start()
-# t7.start()
+t5.start()
+
 
 t1.join()
 t2.join()
 t3.join()
 t4.join()
-# t5.join()
-# t6.join()
-# t7.join()
-
+t5.join()

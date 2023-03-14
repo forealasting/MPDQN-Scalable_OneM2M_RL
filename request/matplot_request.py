@@ -4,12 +4,12 @@ import matplotlib.pyplot as plt
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
 
-simulation_time = 300  # 300 s
+simulation_time = 3600  # 300 s
 use_tm = 1
 r = 300
 
 
-path1 = "request9.txt"
+path1 = "request11.txt"
 
 path_list = [path1]
 
@@ -60,6 +60,7 @@ plt.title("Workload")
 plt.xlabel("timestamp")
 plt.ylabel("Data rate(requests/s) ")
 plt.grid(True)
+plt.ylim(0,100)
 # plt.legend()
 plt.savefig("Data_rate.png")
 plt.show()

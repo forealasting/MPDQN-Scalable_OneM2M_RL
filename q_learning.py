@@ -16,13 +16,9 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 0  # if use_tm
+# define result path
+result_dir = "./all_result/qlearning_result4/"
 
-# initial setting (threshold setting) # no use now
-# T_max = 0.065  # t_max violation
-# T_min = 0.055
-# set_tmin = 1  # 1 if setting tmin
-# cpus = 0.5  # initial cpus
-# replicas = 1  # initial replica
 
 ## initial
 request_num = []
@@ -46,8 +42,8 @@ Rmax_mn1 = 25
 Rmax_mn2 = 15
 
 # Need modify ip if ip change
-ip = "192.168.99.121"  # app_mn1
-ip1 = "192.168.99.122"  # app_mn2
+ip = "192.168.99.124"  # app_mn1
+ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 
 
@@ -70,8 +66,7 @@ RFID = 0
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
-# define result path
-result_dir = "./all_result/qlearning_result/"
+
 
 # check result directory
 if os.path.exists(result_dir):
@@ -139,19 +134,19 @@ class Env:
         url = self.url_list[service_name_list.index(self.service_name)]
         try:
             start = time.time()
-            response = requests.post(url, headers=headers, json=data, timeout=0.1)
+            response = requests.post(url, headers=headers, json=data, timeout=0.05)
             response = response.status_code
             end = time.time()
             response_time = end - start
         except requests.exceptions.Timeout:
             response = "timeout"
-            response_time = 0.1
+            response_time = 0.05
 
         data1 = str(timestamp) + ' ' + str(response) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
         f1.write(data1)
         f1.close()
         if str(response) != '201':
-            response_time = 0.1
+            response_time = 0.05
 
         return response_time
 
@@ -228,7 +223,7 @@ class Env:
 
         if done:
             # print(self.service_name, "_done: ", done)
-            time.sleep(1)
+            time.sleep(10)
             event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
         print(response_time_list)
@@ -253,6 +248,12 @@ class Env:
         next_state = []
         # k, u, c # r
         self.cpu_utilization = self.get_cpu_utilization()
+        path = result_dir + self.service_name + "_agent_get_cpu.txt"
+        f1 = open(path, 'a')
+        data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
+        f1.write(data)
+        f1.close()
+
         u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
         next_state.append(u/10)
@@ -427,7 +428,7 @@ def post_url(url, RFID, content):
         }
     }
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=0.1)
+        response = requests.post(url, headers=headers, json=data, timeout=0.05)
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
@@ -445,7 +446,7 @@ def send_request(stage, request_num, start_time, total_episodes):
         print("reset envronment")
         reset_complete = 0
         reset()  # reset Environment
-        time.sleep(60)
+        time.sleep(70)
         print("reset envronment complete")
         reset_complete = 1
         send_finish = 0
