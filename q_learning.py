@@ -38,8 +38,8 @@ timestamp = 0  # plus 1 in funcntion : send_request
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
-Rmax_mn1 = 25
-Rmax_mn2 = 15
+Rmax_mn1 = 30
+Rmax_mn2 = 20
 
 # Need modify ip if ip change
 ip = "192.168.99.124"  # app_mn1
@@ -59,8 +59,8 @@ learning_rate = 0.01          # Learning rate
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
-min_epsilon = 0.1
-epsilon_decay = 1/480
+min_epsilon = 0
+epsilon_decay = 1/840
 RFID = 0
 ##  stage
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
@@ -226,7 +226,7 @@ class Env:
             time.sleep(10)
             event.set()  # if done and after get_response_time
         # avg_response_time = sum(response_time_list)/len(response_time_list)
-        print(response_time_list)
+        # print(response_time_list)
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
         t_max = 0
@@ -264,7 +264,7 @@ class Env:
         w_pref = 0.5
         w_res = 0.5
         c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
-        reward_perf = w_pref * c_perf
+        reward_perf = c_res = 0 + ((c_res - (1/6)) / (1 - (1/6))) * (1 - 0)
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
         return next_state, reward, reward_perf, reward_res
@@ -293,7 +293,6 @@ class QLearningTable:
             # choose random action
             action = np.random.choice(available_actions)
         else:
-
             # choose greedy action
             q_values = self.q_table[s[0], s[1], s[2], :]
             q_values[np.isin(range(5), available_actions, invert=True)] = -np.iinfo(np.int32).max

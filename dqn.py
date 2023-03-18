@@ -23,8 +23,8 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 1  # if use_tm
-result_dir = "./dqn_result/dqn_result2/"
+use_tm = 0 # if use_tm
+result_dir = "./dqn_result/dqn_result7/"
 
 ## initial
 request_num = []
@@ -45,8 +45,8 @@ event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
 
 # Need modify ip if ip change
-ip = "192.168.99.108"  # app_mn1
-ip1 = "192.168.99.110"  # app_mn2
+ip = "192.168.99.124"  # app_mn1
+ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 Rmax_mn1 = 25
 Rmax_mn2 = 15
@@ -58,13 +58,13 @@ Rmax_mn2 = 15
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 8       # Total episodes
+total_episodes = 10       # Total episodes
 learning_rate = 0.01          # Learning rate
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
 min_epsilon = 0.1
-epsilon_decay = 1/480
+epsilon_decay = 1/840
 memory_size = 100
 batch_size = 8
 target_update = 100
@@ -121,8 +121,8 @@ class Env:
         self.action_space = ['-r', '-1', '0', '1', 'r']
         self.n_actions = len(self.action_space)
 
-        # Need modify ip if ip change
-        self.url_list = url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
+        # Need modify ip if container name change
+        self.url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
                                     "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container",
                                     "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
@@ -226,7 +226,7 @@ class Env:
                 returned_text = subprocess.check_output(cmd, shell=True)
 
         if self.service_name == 'app_mn1':
-            time.sleep(10)  # wait app_mn2 service start
+            time.sleep(10)  # wait app_mn1 service start
         time.sleep(30)  # wait service start
 
         if not done:
@@ -242,7 +242,7 @@ class Env:
 
         if done:
             # print(self.service_name, "_done: ", done)
-            time.sleep(1)
+            time.sleep(10)
             event.set()  # if done and after get_response_time
         # mean_response_time = sum(response_time_list)/len(response_time_list)
         # print(response_time_list)
@@ -274,7 +274,7 @@ class Env:
         f1.close()
         u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
-        next_state.append(u/10)
+        next_state.append(u/10/self.cpus)
         next_state.append(self.cpus)
         next_state.append(request_num[timestamp])
         # state.append(req)
@@ -283,6 +283,7 @@ class Env:
         w_pref = 0.5
         w_res = 0.5
         c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
+        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
@@ -404,11 +405,11 @@ class DQNAgent:
 
         # epsilon greedy policy
         if self.epsilon > np.random.random():
-            print("random action")
+            # print("random action")
             selected_action = np.random.choice(selected_action_idx)
         else:
             q_values = self.dqn(torch.FloatTensor(state).to(self.device))
-            print(q_values)
+            # print(q_values)
             masked_q_values = torch.where(
                 torch.BoolTensor(action_mask).to(self.device),
                 q_values,
@@ -677,6 +678,7 @@ def send_request(stage, request_num, start_time, total_episodes):
     global timestamp, use_tm, RFID
     error = 0
     for episode in range(total_episodes):
+        timestamp = 0
         print("episode: ", episode)
         print("reset envronment")
         reset_complete = 0
@@ -685,7 +687,6 @@ def send_request(stage, request_num, start_time, total_episodes):
         print("reset envronment complete")
         reset_complete = 1
         send_finish = 0
-        timestamp = 0
         for i in request_num:
             # print("timestamp: ", timestamp)
             event_mn1.clear()
