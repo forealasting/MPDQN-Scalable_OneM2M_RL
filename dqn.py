@@ -12,9 +12,7 @@ import json
 import numpy as np
 import random
 import statistics
-import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple
-from IPython.display import clear_output
 import os
 import datetime
 import concurrent.futures
@@ -24,7 +22,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 0 # if use_tm
-result_dir = "./dqn_result/dqn_result7/"
+result_dir = "./dqn_result/dqn_result12/"
 
 ## initial
 request_num = []
@@ -48,8 +46,8 @@ event_timestamp_Ccontrol = threading.Event()
 ip = "192.168.99.124"  # app_mn1
 ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
-Rmax_mn1 = 25
-Rmax_mn2 = 15
+Rmax_mn1 = 30
+Rmax_mn2 = 20
 
 
 ## Learning parameter
@@ -63,7 +61,7 @@ learning_rate = 0.01          # Learning rate
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
-min_epsilon = 0.1
+min_epsilon = 0.01
 epsilon_decay = 1/840
 memory_size = 100
 batch_size = 8
@@ -87,7 +85,18 @@ f = open(path, 'a')
 data = 'date: ' + str(datetime.datetime.now()) + '\n'
 data += 'data_rate: ' + str(data_rate) + '\n'
 data += 'use_tm: ' + str(use_tm) + '\n'
-data += 'simulation_time ' + str(simulation_time) + '\n'
+data += 'Rmax_mn1 ' + str(Rmax_mn1) + '\n'
+data += 'Rmax_mn2 ' + str(Rmax_mn2) + '\n'
+data += 'simulation_time ' + str(simulation_time) + '\n\n'
+data += 'learning_rate ' + str(learning_rate) + '\n'
+data += 'gamma ' + str(gamma) + '\n'
+data += 'max_epsilon ' + str(max_epsilon) + '\n'
+data += 'min_epsilon ' + str(min_epsilon) + '\n'
+data += 'epsilon_decay ' + str(epsilon_decay) + '\n'
+data += 'memory_size ' + str(memory_size) + '\n'
+data += 'batch_size ' + str(batch_size) + '\n'
+data += 'target_update ' + str(target_update) + '\n'
+
 f.write(data)
 f.close()
 
@@ -235,7 +244,7 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(25)
+        time.sleep(20)
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -460,8 +469,8 @@ class DQNAgent:
             losses = []
             rewards = []
 
-            if self.env.service_name == "app_mn1":
-                print("service name:", self.env.service_name, " episode:", episode)
+            # if self.env.service_name == "app_mn1":
+            #     print("service name:", self.env.service_name, " episode:", episode)
             event_timestamp_Ccontrol.wait()
             print("service name:", self.env.service_name, " episode:", episode)
             while True:
@@ -512,7 +521,7 @@ class DQNAgent:
 
             # store_reward(self.env.service_name, avg_rewards)
 
-        torch.save(dqn, result_dir + self.env.service_name + '.pth')
+        torch.save(self.dqn, result_dir + self.env.service_name + '.pt')
 
 
     def get_available_actions(self, state):
