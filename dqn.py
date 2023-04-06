@@ -22,7 +22,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 0 # if use_tm
-result_dir = "./dqn_result/dqn_result12/"
+result_dir = "./dqn_result/dqn_result14/"
 
 ## initial
 request_num = []
@@ -56,7 +56,7 @@ Rmax_mn2 = 20
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 10       # Total episodes
+total_episodes = 8       # Total episodes
 learning_rate = 0.01          # Learning rate
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
@@ -67,7 +67,7 @@ memory_size = 100
 batch_size = 8
 target_update = 100
 
-seed = 777
+seed = 7
 torch.manual_seed(seed)
 np.random.seed(seed)
 
@@ -95,8 +95,8 @@ data += 'min_epsilon ' + str(min_epsilon) + '\n'
 data += 'epsilon_decay ' + str(epsilon_decay) + '\n'
 data += 'memory_size ' + str(memory_size) + '\n'
 data += 'batch_size ' + str(batch_size) + '\n'
+data += 'loss function ' + "smooth l1 loss" + '\n'
 data += 'target_update ' + str(target_update) + '\n'
-
 f.write(data)
 f.close()
 
@@ -497,7 +497,7 @@ class DQNAgent:
                         done = False
                     next_state, reward, reward_perf, reward_res = self.step(action, event, done)
                     # if self.env.service_name == "app_mn1":
-                    print("service name:", self.env.service_name, "action: ", action, " step: ", step, action, " next_state: ",
+                    print("service name:", self.env.service_name, "action: ", action, " step: ", step, " next_state: ",
                           next_state, " reward: ", reward, " done: ", done)
                     store_trajectory(self.env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
                     state = next_state
@@ -560,6 +560,9 @@ class DQNAgent:
 
     def _compute_dqn_loss(self, samples: Dict[str, np.ndarray]) -> torch.Tensor:
         """Return dqn loss."""
+        available_actions_batch = [self.get_available_actions(obs) for obs in samples["next_obs"]]
+        action_mask = np.array([np.isin(range(5), available_actions) for available_actions in available_actions_batch])
+
         device = self.device  # for shortening the following lines
         state = torch.FloatTensor(samples["obs"]).to(device)
         next_state = torch.FloatTensor(samples["next_obs"]).to(device)
@@ -572,12 +575,21 @@ class DQNAgent:
         curr_q_value = self.dqn(state).gather(1, action)
         next_q_value = self.dqn_target(
             next_state
-        ).max(dim=1, keepdim=True)[0].detach()
+        )
+        masked_q_values = torch.where(
+            torch.BoolTensor(action_mask).to(self.device),
+            next_q_value,
+            torch.tensor(-np.inf).to(self.device)
+        )
+        masked_q_values = masked_q_values.detach().max(dim=1, keepdim=True)[0].detach()
         mask = 1 - done
-        target = (reward + self.gamma * next_q_value * mask).to(self.device)
+        target = (reward + self.gamma * masked_q_values * mask).to(self.device)
 
         # calculate dqn loss
-        loss = F.mse_loss(curr_q_value, target)
+        # loss = F.mse_loss(curr_q_value, target)
+        loss = F.smooth_l1_loss(curr_q_value, target)
+
+        return loss
 
         return loss
 
@@ -746,7 +758,7 @@ def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, e
     global timestamp, simulation_time, change, RFID, send_finish
 
     env = Env(service_name)
-    agent = DQNAgent(env, memory_size, batch_size, target_update, epsilon_decay)
+    agent = DQNAgent(env, memory_size, batch_size, target_update, epsilon_decay, max_epsilon, min_epsilon, gamma)
     agent.train(total_episodes, event)
 
 

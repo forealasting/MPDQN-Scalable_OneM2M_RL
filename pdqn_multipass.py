@@ -55,8 +55,8 @@ event_timestamp_Ccontrol = threading.Event()
 ip = "192.168.99.121"  # app_mn1
 ip1 = "192.168.99.122"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
-Rmax_mn1 = 25
-Rmax_mn2 = 15
+Rmax_mn1 = 30
+Rmax_mn2 = 20
 
 
 ## Learning parameter

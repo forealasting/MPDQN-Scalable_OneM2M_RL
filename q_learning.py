@@ -62,10 +62,6 @@ max_epsilon = 1
 min_epsilon = 0
 epsilon_decay = 1/840
 RFID = 0
-##  stage
-stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
-         "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
-
 
 
 # check result directory
@@ -75,6 +71,28 @@ if os.path.exists(result_dir):
 
 # build dir
 os.mkdir(result_dir)
+
+# store setting
+path = result_dir + "setting.txt"
+f = open(path, 'a')
+data = 'date: ' + str(datetime.datetime.now()) + '\n'
+data += 'data_rate: ' + str(data_rate) + '\n'
+data += 'use_tm: ' + str(use_tm) + '\n'
+data += 'Rmax_mn1 ' + str(Rmax_mn1) + '\n'
+data += 'Rmax_mn2 ' + str(Rmax_mn2) + '\n'
+data += 'simulation_time ' + str(simulation_time) + '\n\n'
+data += 'learning_rate ' + str(learning_rate) + '\n'
+data += 'gamma ' + str(gamma) + '\n'
+data += 'max_epsilon ' + str(max_epsilon) + '\n'
+data += 'min_epsilon ' + str(min_epsilon) + '\n'
+data += 'epsilon_decay ' + str(epsilon_decay) + '\n'
+
+f.write(data)
+f.close()
+
+##  stage
+stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
+         "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
     #   Modify the workload path if it is different
