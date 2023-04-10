@@ -1,617 +1,90 @@
-# torch
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-import random
-# from memory.memory import Memory
-from utils import soft_update_target_network, hard_update_target_network
-from utils.noise import OrnsteinUhlenbeckActionNoise
 
-import requests
-import time
-import threading
-import subprocess
-import json
-import statistics
-import os
-import datetime
-import math
-from copy import deepcopy
-
-print(datetime.datetime.now())
-
-# request rate r
-data_rate = 50      # if not use_tm
-use_tm = 0  # if use_tm
-result_dir = "./test_result/"
-
-## initial
-request_num = []
-# timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
-# learning step:          0,  ..., 1,     , 120
-
-simulation_time = 3602  # 300 s  # 0 ~ 3601:  3602
-request_n = simulation_time
-
-## global variable
-change = 0   # 1 if take action / 0 if init or after taking action
-reset_complete = 0
-send_finish = 0
-timestamp = 0  # plus 1 in funcntion : send_request
-RFID = 0  # random number for data
-event_mn1 = threading.Event()
-event_mn2 = threading.Event()
-event_timestamp_Ccontrol = threading.Event()
-
-# Need modify ip if ip change
-ip = "192.168.99.124"  # app_mn1
-ip1 = "192.168.99.125"  # app_mn2
-error_rate = 0.2  # 0.2/0.5
-Rmax_mn1 = 30
-Rmax_mn2 = 20
-
-
-## Learning parameter
-# S ={k, u , c, r}
-# k (replica): 1 ~ 3                          actual value : same
-# u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
-# c (used cpus) : 0.1 0.2 ... 1               actual value : same
-# action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 8       # Total episodes
-multipass = False
-# Exploration parameters
-gamma = 0.9                 # Discounting rate
-
-epsilon_steps = 840
-epsilon_final = 0.01
-
-# Learning rate
-tau_actor = 0.1
-tau_actor_param = 0.001
-learning_rate_actor = 0.001
-learning_rate_actor_param = 0.0001
-
-replay_memory_size = 100  # Replay memory
-batch_size = 8
-initial_memory_threshold = 8  # Number of transitions required to start learning
-use_ornstein_noise = False
-clip_grad = 10
-layers = [64,]
-seed = 7
-
-
-action_input_layer = 0  # no use
-
-# check result directory
-# if os.path.exists(result_dir):
-#     print("Deleting existing result directory...")
-#     raise SystemExit  # end process
-
-# build dir
-# os.mkdir(result_dir)
-# store setting
-path = result_dir + "setting.txt"
-
-# Define settings dictionary
-settings = {
-    'date': datetime.datetime.now(),
-    'data_rate': data_rate,
-    'use_tm': use_tm,
-    'Rmax_mn1': Rmax_mn1,
-    'Rmax_mn2': Rmax_mn2,
-    'simulation_time': simulation_time,
-    'tau_actor': tau_actor,
-    'tau_actor_param': tau_actor_param,
-    'learning_rate_actor': learning_rate_actor,
-    'learning_rate_actor_param': learning_rate_actor_param,
-    'gamma': gamma,
-    'epsilon_steps': epsilon_steps,
-    'epsilon_final': epsilon_final,
-    'replay_memory_size': replay_memory_size,
-    'batch_size': batch_size,
-    'loss_function': 'smooth l1 loss',
-    'layers': layers
-}
-
-# Write settings to file
-with open(result_dir + 'setting.txt', 'a') as f:
-    for key, value in settings.items():
-        f.write(f'{key}: {value}\n')
-
-
-## 7/8 stage
-stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
-         "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
-
-if use_tm:
-    f = open('request/request12.txt')
-
-    for line in f:
-        if len(request_num) < request_n:
-
-            request_num.append(int(float(line)))
-else:
-    request_num = [data_rate for i in range(simulation_time)]
-
-
-print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
-
-
-class Env:
-
-    def __init__(self, service_name="app_mn1"):
-
-        self.service_name = service_name
-        self.cpus = 0.5
-        self.replica = 1
-        self.cpu_utilization = 0.0
-        self.action_space = ['1', '1', '1']
-        self.state_space = [1, 0.0, 0.5, 10]
-        self.n_state = len(self.state_space)
-        self.n_actions = len(self.action_space)
-
-        # Need modify ip if container name change
-        self.url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
-                                    "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container",
-                                    "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
-
-    def reset(self):
-        cmd = "sudo docker-machine ssh default docker stack rm app"
-        subprocess.check_output(cmd, shell=True)
-        cmd1 = "sudo docker-machine ssh default docker stack deploy --compose-file docker-compose.yml app"
-        subprocess.check_output(cmd1, shell=True)
-        time.sleep(60)
-
-    def get_response_time(self):
-
-        path1 = result_dir + self.service_name + "_response.txt"
-
-        f1 = open(path1, 'a')
-        RFID = random.randint(0, 1000000)
-        headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
-        data = {
-            "m2m:cin": {
-                "con": "true",
-                "cnf": "application/json",
-                "lbl": "req",
-                "rn": str(RFID + 1000),
-            }
-        }
-        # URL
-        service_name_list = ["app_mn1", "app_mn2"]
-        url = self.url_list[service_name_list.index(self.service_name)]
-        try:
-            start = time.time()
-            response = requests.post(url, headers=headers, json=data, timeout=0.05)
-            response = response.status_code
-            end = time.time()
-            response_time = end - start
-        except requests.exceptions.Timeout:
-            response = "timeout"
-            response_time = 0.05
-
-        data1 = str(timestamp) + ' ' + str(response) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
-        f1.write(data1)
-        f1.close()
-        if str(response) != '201':
-            response_time = 0.05
-
-        return response_time
-
-    def get_cpu_utilization(self):
-        path = result_dir + self.service_name + '_cpu.txt'
-        try:
-            f = open(path, "r")
-            cpu = []
-            time = []
-            for line in f:
-                s = line.split(' ')
-                time.append(float(s[0]))
-                cpu.append(float(s[2]))
-
-            last_avg_cpu = statistics.mean(cpu[-5:])
-            f.close()
-
-            return last_avg_cpu
-        except:
-
-            print('cant open')
-
-    def discretize_cpu_value(self, value):
-        return int(round(value / 10))
-
-    def step(self, action, event, done):
-        global timestamp, send_finish, change, simulation_time
-
-
-        action_replica = action[0]
-        action_cpus = action[1][action_replica][0]
-        self.replica = action_replica + 1  # 0 1 2 (index)-> 1 2 3 (replica)
-        self.cpus = round(action_cpus, 2)
-        # print(self.replica, self.cpus)
-        change = 1
-        cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
-        cmd1 = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
-        #returned_text = subprocess.check_output(cmd, shell=True)
-        #returned_text = subprocess.check_output(cmd1, shell=True)
-
-        if self.service_name == 'app_mn1':
-            time.sleep(5)  # wait app_mn1 service start
-        # time.sleep(40)  # wait service start
-
-        if not done:
-            # print(self.service_name, "_done: ", done)
-            # print(self.service_name, "_step complete")
-            event.set()
-
-        response_time_list = []
-        # time.sleep(20)
-        for i in range(5):
-            # time.sleep(1)
-            response_time_list.append(self.get_response_time())
-
-        if done:
-            # print(self.service_name, "_done: ", done)
-            time.sleep(10)
-            event.set()  # if done and after get_response_time
-        # mean_response_time = sum(response_time_list)/len(response_time_list)
-        # print(response_time_list)
-        mean_response_time = statistics.mean(response_time_list)
-        mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
-        t_max = 0
-
-        if mean_response_time >= 50:
-            Rt = 50
-        else:
-            Rt = mean_response_time
-        if self.service_name == "app_mn1":
-            t_max = Rmax_mn1
-        elif self.service_name == "app_mn2":
-            t_max = Rmax_mn2
-
-
-        tmp_d = math.exp(50 / t_max)
-        tmp_n = math.exp(Rt / t_max)
-        c_perf = tmp_n / tmp_d
-
-        c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
-        # next_state = []
-        # # k, u, c # r
-        # self.cpu_utilization = self.get_cpu_utilization()
-        # path = result_dir + self.service_name + "_agent_get_cpu.txt"
-        # f1 = open(path, 'a')
-        # data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
-        # f1.write(data)
-        # f1.close()
-        # u = self.discretize_cpu_value(self.cpu_utilization)
-        # next_state.append(self.replica)
-        # next_state.append(u/10/self.cpus)
-        # next_state.append(self.cpus)
-        # next_state.append(request_num[timestamp])
-        # state.append(req)
-        next_state = [1, 0.0, 0.5, 10]
-        # cost function
-        w_pref = 0.5
-        w_res = 0.5
-        c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
-        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)
-        reward_perf = w_pref * c_perf
-        reward_res = w_res * c_res
-        reward = -(reward_perf + reward_res)
-        return next_state, reward, reward_perf, reward_res
-
-
-
-def store_cpu(start_time, woker_name):
-    global timestamp, cpus, change, reset_complete
-
-    cmd = "sudo docker-machine ssh " + woker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
-    while True:
-
-        if send_finish == 1:
-            break
-        if change == 0 and reset_complete == 1:
-            returned_text = subprocess.check_output(cmd, shell=True)
-            my_data = returned_text.decode('utf8')
-            # print(my_data.find("CPUPerc"))
-            my_data = my_data.split("}")
-            # state_u = []
-            for i in range(len(my_data) - 1):
-                # print(my_data[i]+"}")
-                my_json = json.loads(my_data[i] + "}")
-                name = my_json['Name'].split(".")[0]
-                cpu = my_json['CPUPerc'].split("%")[0]
-                if float(cpu) > 0:
-                    final_time = time.time()
-                    t = final_time - start_time
-                    path = result_dir + name + "_cpu.txt"
-                    f = open(path, 'a')
-                    data = str(timestamp) + ' ' + str(t) + ' '
-                    # for d in state_u:
-                    data = data + str(cpu) + ' ' + '\n'
-
-                    f.write(data)
-                    f.close()
-
-
-# reset Environment
-def reset():
-    cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
-    cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
-    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn2"
-    subprocess.check_output(cmd1, shell=True)
-    subprocess.check_output(cmd2, shell=True)
-    subprocess.check_output(cmd3, shell=True)
-    subprocess.check_output(cmd4, shell=True)
-
-
-def store_reward(service_name, reward):
-    # Write the string to a text file
-    path = result_dir + service_name + "_reward.txt"
-    f = open(path, 'a')
-    data = str(reward) + '\n'
-    f.write(data)
-
-
-def store_loss(service_name, loss):
-    # Write the string to a text file
-    path = result_dir + service_name + "_loss.txt"
-    f = open(path, 'a')
-    data = str(loss) + '\n'
-    f.write(data)
-
-
-def store_trajectory(service_name, step, s, a_r, a_c, r, r_perf, r_res, s_, done):
-    path = result_dir + service_name + "_trajectory.txt"
-    tmp_s = list(s)
-    tmp_s_ = list(s_)
-    f = open(path, 'a')
-    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a_r) + ' ' + str(a_c) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
-    f.write(data)
-
-
-def store_error_count(error):
-    # Write the string to a text file
-    path = result_dir + "error.txt"
-    f = open(path, 'a')
-    data = str(error) + '\n'
-    f.write(data)
-
-
-
-def post_url(url, RFID, content):
-
-    headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
-    data = {
-        "m2m:cin": {
-            "con": content,
-            "cnf": "application/json",
-            "lbl": "req",
-            "rn": str(RFID),
-        }
-    }
-    try:
-        response = requests.post(url, headers=headers, json=data, timeout=0.05)
-        response = str(response.status_code)
-    except requests.exceptions.Timeout:
-        response = "timeout"
-
-    return response
-
-def send_request(stage, request_num, start_time, total_episodes):
-    global change, send_finish, reset_complete
-    global timestamp, use_tm, RFID
-    error = 0
-    for episode in range(total_episodes):
-        timestamp = 0
-        print("episode: ", episode)
-        print("reset envronment")
-        reset_complete = 0
-        # reset()  # reset Environment
-        # time.sleep(70)
-        print("reset envronment complete")
-        reset_complete = 1
-        send_finish = 0
-        for i in request_num:
-            # print("timestamp: ", timestamp)
-            event_mn1.clear()
-            event_mn2.clear()
-            if ((timestamp - 1) % 30) == 0:
-                print("wait mn1 mn2 step ...")
-                event_mn1.wait()
-                event_mn2.wait()
-                change = 0
-            event_timestamp_Ccontrol.clear()
-            exp = np.random.exponential(scale=1 / i, size=i)
-            tmp_count = 0
-            # for j in range(i):
-            #     try:
-            #         url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-            #         # change stage
-            #         url1 = url + stage[(tmp_count * 10 + j) % 8]
-            #         if error_rate > random.random():
-            #             content = "false"
-            #         else:
-            #             content = "true"
-            #         response = post_url(url1, RFID, content)
-            #         RFID += 1
-            #
-            #     except:
-            #         print("eror")
-            #         error += 1
-            #
-            #     if use_tm == 1:
-            #         time.sleep(exp[tmp_count])
-            #         tmp_count += 1
-            #
-            #     else:
-            #         time.sleep(1 / i)  # send requests every 1s
-            time.sleep(0.1)
-            timestamp += 1
-            event_timestamp_Ccontrol.set()
-
-    send_finish = 1
-    final_time = time.time()
-    alltime = final_time - start_time
-    store_error_count(error)
-    print('time:: ', alltime)
-
-
-def pad_action(act, act_param):
-    params = [np.zeros((1,), dtype=np.float32), np.zeros((1,), dtype=np.float32), np.zeros((1,), dtype=np.float32)]
-    params[act][:] = act_param
-    return (act, params)
-
-
-def evaluate(env, agent, episodes=1000):
-    returns = []
-    timesteps = []
-    for _ in range(episodes):
-        state, _ = env.reset()
-        terminal = False
-        t = 0
-        total_reward = 0.
-        while not terminal:
-            t += 1
-            state = np.array(state, dtype=np.float32, copy=False)
-            act, act_param, all_action_parameters = agent.act(state)
-            action = pad_action(act, act_param)
-            (state, _), reward, terminal, _ = env.step(action)
-            total_reward += reward
-        timesteps.append(t)
-        returns.append(total_reward)
-    # return np.column_stack((returns, timesteps))
-    return np.array(returns)
-
-
-def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
-        replay_memory_size, epsilon_steps, tau_actor, tau_actor_param, use_ornstein_noise, learning_rate_actor,
-        learning_rate_actor_param, epsilon_final,
-        clip_grad, layers, multipass, action_input_layer, event, service_name, seed):
-    global timestamp, simulation_time
-
-    env = Env(service_name)
-    # agent = MPDQNAgent(env, memory_size, batch_size, target_update, epsilon_decay, max_epsilon, min_epsilon, gamma)
-    # agent.train(total_episodes, event)
-
-    from pdqn_v1 import PDQNAgent
-    from pdqn_multipass import MultiPassPDQNAgent
-    agent_class = PDQNAgent
-    if multipass:
-        agent_class = MultiPassPDQNAgent
-    agent = agent_class(
-                       env.n_state, env.n_actions,
-                       batch_size=batch_size,
-                       learning_rate_actor=learning_rate_actor,
-                       learning_rate_actor_param=learning_rate_actor_param,
-                       epsilon_steps=epsilon_steps,
-                       gamma=gamma,
-                       tau_actor=tau_actor,
-                       tau_actor_param=tau_actor_param,
-                       clip_grad=clip_grad,
-                       initial_memory_threshold=initial_memory_threshold,
-                       use_ornstein_noise=use_ornstein_noise,
-                       replay_memory_size=replay_memory_size,
-                       epsilon_final=epsilon_final,
-                       actor_kwargs={'hidden_layers': layers,
-                                     'action_input_layer': action_input_layer},
-                       actor_param_kwargs={'hidden_layers': layers,
-                                           'squashing_function': True,
-                                           'output_layer_init_std': 0.0001},
-                       seed=seed)
-    # print(agent)
-    total_reward = 0.
-    returns = []
-    start_time = time.time()
-    init_state = [1, 0.0, 0.5, 10]
-    step = 0
-    for episode in range(total_episodes):
-        state = init_state
-        done = False
-        state = np.array(init_state, dtype=np.float32)
-
-        print("service name:", env.service_name, " episode:", episode)
-        act, act_param, all_action_parameters = agent.act(state)  # act : 0  act_param : -0.79951,-0.97346,0.86144
-        action = pad_action(act, act_param)
-        # print(action[0], action[1][action[0]][0])
-
-        while True:
-            if timestamp == 0:
-                done = False
-            event_timestamp_Ccontrol.wait()
-            if (((timestamp - 1) % 30) == 0) and (not done):
-                if timestamp == (simulation_time - 1):
-                    done = True
-                else:
-                    done = False
-
-                next_state, reward, reward_perf, reward_res = env.step(action, event, done)
-                # Covert np.float32
-                next_state = np.array(next_state, dtype=np.float32)
-                next_act, next_act_param, next_all_action_parameters = agent.act(next_state)  # next_act: 2 # next_act_param: 0.85845 # next_all_action_parameters: -0.79984,-0.97112,0.85845
-
-                next_action = pad_action(next_act, next_act_param)
-                agent.step(state, (act, all_action_parameters), reward, next_state,
-                           (next_act, next_all_action_parameters), done)
-                act, act_param, all_action_parameters = next_act, next_act_param, next_all_action_parameters
-                action = next_action
-                state = next_state
-                print("service name:", env.service_name, "action: ", action[0]+1, round(action[1][action[0]][0], 2), " step: ", step,
-                      " next_state: ",
-                      next_state, " reward: ", reward, " done: ", done, "epsilon", agent.epsilon)
-                store_trajectory(env.service_name, step, state, action[0]+1, round(action[1][action[0]][0], 2), reward, reward_perf, reward_res,
-                                 next_state, done)
-                agent.epsilon_decay()
-
-                step += 1
-                event_timestamp_Ccontrol.clear()
-
-            if done:
-                break
-    print(agent.updates)
-    end_time = time.time()
-    print(end_time-start_time)
-
-
-    # if evaluation_episodes > 0:
-    #     print("Evaluating agent over {} episodes".format(evaluation_episodes))
-    #     agent.epsilon_final = 0.
-    #     agent.epsilon = 0.
-    #     agent.noise = None
-    #     evaluation_returns = evaluate(env, agent, evaluation_episodes)
-    #     print("Ave. evaluation return =", sum(evaluation_returns) / len(evaluation_returns))
-    #     np.save(os.path.join(dir, title + "{}e".format(str(seed))), evaluation_returns)
-
-
-
-start_time = time.time()
-
-t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
-# t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
-# t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
-t4 = threading.Thread(target=mpdqn, args=(total_episodes, batch_size, gamma, initial_memory_threshold,
-        replay_memory_size, epsilon_steps, tau_actor, tau_actor_param, use_ornstein_noise, learning_rate_actor,
-        learning_rate_actor_param, epsilon_final,
-        clip_grad, layers, multipass, action_input_layer, event_mn1, 'app_mn1', seed, ))
-
-t5 = threading.Thread(target=mpdqn, args=(total_episodes, batch_size, gamma, initial_memory_threshold,
-        replay_memory_size, epsilon_steps, tau_actor, tau_actor_param, use_ornstein_noise, learning_rate_actor,
-        learning_rate_actor_param, epsilon_final,
-        clip_grad, layers, multipass, action_input_layer, event_mn2, 'app_mn2', seed, ))
-
-t1.start()
-# t2.start()
-# t3.start()
-t4.start()
-t5.start()
-
-
-t1.join()
-# t2.join()
-# t3.join()
-t4.join()
-t5.join()
-
+from pdqn_v1 import PDQNAgent
+from utils import hard_update_target_network
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+class MultiPassQActor(nn.Module):
+
+    def __init__(self, state_size, action_size, action_parameter_size_list, hidden_layers=(100,),
+                 output_layer_init_std=None, activation="relu", **kwargs):
+        super().__init__()
+        self.state_size = state_size
+        self.action_size = action_size
+        self.action_parameter_size_list = action_parameter_size_list
+        self.action_parameter_size = sum(action_parameter_size_list)
+        self.activation = activation
+
+        # create layers
+        self.layers = nn.ModuleList()
+        inputSize = self.state_size + self.action_parameter_size
+        lastHiddenLayerSize = inputSize
+        if hidden_layers is not None:
+            nh = len(hidden_layers)
+            self.layers.append(nn.Linear(inputSize, hidden_layers[0]))
+            for i in range(1, nh):
+                self.layers.append(nn.Linear(hidden_layers[i - 1], hidden_layers[i]))
+            lastHiddenLayerSize = hidden_layers[nh - 1]
+        self.layers.append(nn.Linear(lastHiddenLayerSize, self.action_size))
+
+        # initialise layer weights
+        for i in range(0, len(self.layers) - 1):
+            nn.init.kaiming_normal_(self.layers[i].weight, nonlinearity=activation)
+            nn.init.zeros_(self.layers[i].bias)
+        if output_layer_init_std is not None:
+            nn.init.normal_(self.layers[-1].weight, mean=0., std=output_layer_init_std)
+
+        nn.init.zeros_(self.layers[-1].bias)
+
+        self.offsets = self.action_parameter_size_list.cumsum()
+        self.offsets = np.insert(self.offsets, 0, 0)
+
+    def forward(self, state, action_parameters):
+        # implement forward
+
+        Q = []
+        # duplicate inputs so we can process all actions in a single pass
+        batch_size = state.shape[0]
+
+        x = torch.cat((state, torch.zeros_like(action_parameters)), dim=1)
+        x = x.repeat(self.action_size, 1)
+        for a in range(self.action_size):
+            x[a*batch_size:(a+1)*batch_size, self.state_size + self.offsets[a]: self.state_size + self.offsets[a+1]] \
+                = action_parameters[:, self.offsets[a]:self.offsets[a+1]]
+
+        num_layers = len(self.layers)
+        for i in range(0, num_layers - 1):
+            x = F.relu(self.layers[i](x))
+
+        Qall = self.layers[-1](x)
+
+        # extract Q-values for each action
+        for a in range(self.action_size):
+            Qa = Qall[a*batch_size:(a+1)*batch_size, a]
+            if len(Qa.shape) == 1:
+                Qa = Qa.unsqueeze(1)
+            Q.append(Qa)
+        Q = torch.cat(Q, dim=1)
+        return Q
+
+
+class MultiPassPDQNAgent(PDQNAgent):
+    NAME = "Multi-Pass P-DQN Agent"
+
+    def __init__(self,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        self.actor = MultiPassQActor(self.observation_space, self.num_actions, self.action_parameter_sizes,
+                                     **kwargs['actor_kwargs']).to(device)
+        self.actor_target = MultiPassQActor(self.observation_space, self.num_actions, self.action_parameter_sizes,
+                                            **kwargs['actor_kwargs']).to(device)
+        hard_update_target_network(self.actor, self.actor_target)
+        self.actor_target.eval()
+        self.actor_optimiser = optim.Adam(self.actor.parameters(), lr=self.learning_rate_actor)
