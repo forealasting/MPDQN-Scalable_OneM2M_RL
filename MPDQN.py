@@ -24,8 +24,8 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 0  # if use_tm
-result_dir = "./test_result/"
+use_tm = 1  # if use_tm
+result_dir = "./mpdqn_result/result1/"
 
 ## initial
 request_num = []
@@ -59,8 +59,8 @@ Rmax_mn2 = 20
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 8       # Total episodes
-multipass = False
+total_episodes = 9       # Total episodes
+multipass = True
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 
@@ -85,12 +85,12 @@ seed = 7
 action_input_layer = 0  # no use
 
 # check result directory
-# if os.path.exists(result_dir):
-#     print("Deleting existing result directory...")
-#     raise SystemExit  # end process
+if os.path.exists(result_dir):
+    print("Deleting existing result directory...")
+    raise SystemExit  # end process
 
 # build dir
-# os.mkdir(result_dir)
+os.mkdir(result_dir)
 # store setting
 path = result_dir + "setting.txt"
 
@@ -234,12 +234,12 @@ class Env:
         change = 1
         cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
         cmd1 = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
-        #returned_text = subprocess.check_output(cmd, shell=True)
-        #returned_text = subprocess.check_output(cmd1, shell=True)
+        returned_text = subprocess.check_output(cmd, shell=True)
+        returned_text = subprocess.check_output(cmd1, shell=True)
 
         if self.service_name == 'app_mn1':
             time.sleep(5)  # wait app_mn1 service start
-        # time.sleep(40)  # wait service start
+        time.sleep(40)  # wait service start
 
         if not done:
             # print(self.service_name, "_done: ", done)
@@ -247,7 +247,7 @@ class Env:
             event.set()
 
         response_time_list = []
-        # time.sleep(20)
+        time.sleep(20)
         for i in range(5):
             # time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -277,21 +277,20 @@ class Env:
         c_perf = tmp_n / tmp_d
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
-        # next_state = []
+        next_state = []
         # # k, u, c # r
-        # self.cpu_utilization = self.get_cpu_utilization()
-        # path = result_dir + self.service_name + "_agent_get_cpu.txt"
-        # f1 = open(path, 'a')
-        # data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
-        # f1.write(data)
-        # f1.close()
-        # u = self.discretize_cpu_value(self.cpu_utilization)
-        # next_state.append(self.replica)
-        # next_state.append(u/10/self.cpus)
-        # next_state.append(self.cpus)
-        # next_state.append(request_num[timestamp])
-        # state.append(req)
-        next_state = [1, 0.0, 0.5, 10]
+        self.cpu_utilization = self.get_cpu_utilization()
+        path = result_dir + self.service_name + "_agent_get_cpu.txt"
+        f1 = open(path, 'a')
+        data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
+        f1.write(data)
+        f1.close()
+        u = self.discretize_cpu_value(self.cpu_utilization)
+        next_state.append(self.replica)
+        next_state.append(u/10/self.cpus)
+        next_state.append(self.cpus)
+        next_state.append(request_num[timestamp])
+
         # cost function
         w_pref = 0.5
         w_res = 0.5
@@ -410,8 +409,8 @@ def send_request(stage, request_num, start_time, total_episodes):
         print("episode: ", episode)
         print("reset envronment")
         reset_complete = 0
-        # reset()  # reset Environment
-        # time.sleep(70)
+        reset()  # reset Environment
+        time.sleep(70)
         print("reset envronment complete")
         reset_complete = 1
         send_finish = 0
@@ -427,29 +426,28 @@ def send_request(stage, request_num, start_time, total_episodes):
             event_timestamp_Ccontrol.clear()
             exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
-            # for j in range(i):
-            #     try:
-            #         url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-            #         # change stage
-            #         url1 = url + stage[(tmp_count * 10 + j) % 8]
-            #         if error_rate > random.random():
-            #             content = "false"
-            #         else:
-            #             content = "true"
-            #         response = post_url(url1, RFID, content)
-            #         RFID += 1
-            #
-            #     except:
-            #         print("eror")
-            #         error += 1
-            #
-            #     if use_tm == 1:
-            #         time.sleep(exp[tmp_count])
-            #         tmp_count += 1
-            #
-            #     else:
-            #         time.sleep(1 / i)  # send requests every 1s
-            time.sleep(0.1)
+            for j in range(i):
+                try:
+                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+                    # change stage
+                    url1 = url + stage[(tmp_count * 10 + j) % 8]
+                    if error_rate > random.random():
+                        content = "false"
+                    else:
+                        content = "true"
+                    response = post_url(url1, RFID, content)
+                    RFID += 1
+
+                except:
+                    print("eror")
+                    error += 1
+
+                if use_tm == 1:
+                    time.sleep(exp[tmp_count])
+                    tmp_count += 1
+
+                else:
+                    time.sleep(1 / i)  # send requests every 1s
             timestamp += 1
             event_timestamp_Ccontrol.set()
 
@@ -590,8 +588,8 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 start_time = time.time()
 
 t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
-# t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
-# t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
+t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
+t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
 t4 = threading.Thread(target=mpdqn, args=(total_episodes, batch_size, gamma, initial_memory_threshold,
         replay_memory_size, epsilon_steps, tau_actor, tau_actor_param, use_ornstein_noise, learning_rate_actor,
         learning_rate_actor_param, epsilon_final,
@@ -603,15 +601,15 @@ t5 = threading.Thread(target=mpdqn, args=(total_episodes, batch_size, gamma, ini
         clip_grad, layers, multipass, action_input_layer, event_mn2, 'app_mn2', seed, ))
 
 t1.start()
-# t2.start()
-# t3.start()
+t2.start()
+t3.start()
 t4.start()
 t5.start()
 
 
 t1.join()
-# t2.join()
-# t3.join()
+t2.join()
+t3.join()
 t4.join()
 t5.join()
 

@@ -21,8 +21,8 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 0 # if use_tm
-result_dir = "./dqn_result/dqn_result14/"
+use_tm = 1 # if use_tm
+result_dir = "./dqn_result/dqn_result16/"
 
 ## initial
 request_num = []
@@ -56,7 +56,7 @@ Rmax_mn2 = 20
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 8       # Total episodes
+total_episodes = 9       # Total episodes
 learning_rate = 0.01          # Learning rate
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
@@ -67,7 +67,7 @@ memory_size = 100
 batch_size = 8
 target_update = 100
 
-seed = 7
+seed = 9
 torch.manual_seed(seed)
 np.random.seed(seed)
 
@@ -235,8 +235,8 @@ class Env:
                 returned_text = subprocess.check_output(cmd, shell=True)
 
         if self.service_name == 'app_mn1':
-            time.sleep(10)  # wait app_mn1 service start
-        time.sleep(30)  # wait service start
+            time.sleep(5)  # wait app_mn1 service start
+        time.sleep(40)  # wait service start
 
         if not done:
             # print(self.service_name, "_done: ", done)
@@ -588,8 +588,6 @@ class DQNAgent:
         # calculate dqn loss
         # loss = F.mse_loss(curr_q_value, target)
         loss = F.smooth_l1_loss(curr_q_value, target)
-
-        return loss
 
         return loss
 
