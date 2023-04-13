@@ -6,5 +6,6 @@
 
 ## DQN(dqn.py)
 
-## PDQN(pdqn.py)
+## PDQN(MPDQN.py) multipass set False
 
+## MPDQN(MPDQN.py) multipass set True
