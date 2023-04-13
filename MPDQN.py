@@ -1,14 +1,5 @@
-# torch
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import numpy as np
 import random
-# from memory.memory import Memory
-from utils import soft_update_target_network, hard_update_target_network
-from utils.noise import OrnsteinUhlenbeckActionNoise
-
 import requests
 import time
 import threading
@@ -18,14 +9,15 @@ import statistics
 import os
 import datetime
 import math
-from copy import deepcopy
+from pdqn_v1 import PDQNAgent
+from pdqn_multipass import MultiPassPDQNAgent
 
 print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/result1/"
+use_tm = 0  # if use_tm
+result_dir = "./mpdqn_result/result2/"
 
 ## initial
 request_num = []
@@ -54,25 +46,27 @@ Rmax_mn2 = 20
 
 
 ## Learning parameter
-# S ={k, u , c, r}
+# S ={k, u , c, r} {k, u , c}
 # k (replica): 1 ~ 3                          actual value : same
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 9       # Total episodes
-multipass = True
-# Exploration parameters
-gamma = 0.9                 # Discounting rate
+Training_episodes = 8
+Test_episodes = 1
+total_episodes = Training_episodes + Test_episodes      # Total episodes
+multipass = True  # False : PDQN  / Ture: MPDQN
 
+# Exploration parameters
 epsilon_steps = 840
+epsilon_initial = 1
 epsilon_final = 0.01
 
 # Learning rate
 tau_actor = 0.1
-tau_actor_param = 0.001
+tau_actor_param = 0.01
 learning_rate_actor = 0.001
-learning_rate_actor_param = 0.0001
-
+learning_rate_actor_param = 0.001
+gamma = 0.9                 # Discounting rate
 replay_memory_size = 100  # Replay memory
 batch_size = 8
 initial_memory_threshold = 8  # Number of transitions required to start learning
@@ -131,10 +125,9 @@ if use_tm:
     for line in f:
         if len(request_num) < request_n:
 
-            request_num.append(int(float(line)))
+            request_num.append(int(float(line)*2))
 else:
     request_num = [data_rate for i in range(simulation_time)]
-
 
 print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
 
@@ -148,7 +141,7 @@ class Env:
         self.replica = 1
         self.cpu_utilization = 0.0
         self.action_space = ['1', '1', '1']
-        self.state_space = [1, 0.0, 0.5, 10]
+        self.state_space = [1, 0.0, 0.5]  # [1, 0.0, 0.5, 10]
         self.n_state = len(self.state_space)
         self.n_actions = len(self.action_space)
 
@@ -158,16 +151,12 @@ class Env:
                                     "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
     def reset(self):
-        cmd = "sudo docker-machine ssh default docker stack rm app"
-        subprocess.check_output(cmd, shell=True)
-        cmd1 = "sudo docker-machine ssh default docker stack deploy --compose-file docker-compose.yml app"
-        subprocess.check_output(cmd1, shell=True)
-        time.sleep(60)
+        self.cpus = 0.5
+        self.replica = 1
 
     def get_response_time(self):
 
         path1 = result_dir + self.service_name + "_response.txt"
-
         f1 = open(path1, 'a')
         RFID = random.randint(0, 1000000)
         headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
@@ -288,6 +277,7 @@ class Env:
         u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
         next_state.append(u/10/self.cpus)
+        # next_state.append(u/10)
         next_state.append(self.cpus)
         next_state.append(request_num[timestamp])
 
@@ -439,7 +429,7 @@ def send_request(stage, request_num, start_time, total_episodes):
                     RFID += 1
 
                 except:
-                    print("eror")
+                    print("error")
                     error += 1
 
                 if use_tm == 1:
@@ -464,27 +454,6 @@ def pad_action(act, act_param):
     return (act, params)
 
 
-def evaluate(env, agent, episodes=1000):
-    returns = []
-    timesteps = []
-    for _ in range(episodes):
-        state, _ = env.reset()
-        terminal = False
-        t = 0
-        total_reward = 0.
-        while not terminal:
-            t += 1
-            state = np.array(state, dtype=np.float32, copy=False)
-            act, act_param, all_action_parameters = agent.act(state)
-            action = pad_action(act, act_param)
-            (state, _), reward, terminal, _ = env.step(action)
-            total_reward += reward
-        timesteps.append(t)
-        returns.append(total_reward)
-    # return np.column_stack((returns, timesteps))
-    return np.array(returns)
-
-
 def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
         replay_memory_size, epsilon_steps, tau_actor, tau_actor_param, use_ornstein_noise, learning_rate_actor,
         learning_rate_actor_param, epsilon_final,
@@ -492,11 +461,8 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     global timestamp, simulation_time
 
     env = Env(service_name)
-    # agent = MPDQNAgent(env, memory_size, batch_size, target_update, epsilon_decay, max_epsilon, min_epsilon, gamma)
-    # agent.train(total_episodes, event)
 
-    from pdqn_v1 import PDQNAgent
-    from pdqn_multipass import MultiPassPDQNAgent
+
     agent_class = PDQNAgent
     if multipass:
         agent_class = MultiPassPDQNAgent
@@ -505,6 +471,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                        batch_size=batch_size,
                        learning_rate_actor=learning_rate_actor,
                        learning_rate_actor_param=learning_rate_actor_param,
+                       epsilon_initial=epsilon_initial,
                        epsilon_steps=epsilon_steps,
                        gamma=gamma,
                        tau_actor=tau_actor,
@@ -521,18 +488,22 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                                            'output_layer_init_std': 0.0001},
                        seed=seed)
     # print(agent)
-    total_reward = 0.
-    returns = []
+
     start_time = time.time()
-    init_state = [1, 0.0, 0.5, 10]
+    init_state = [1, 0.0, 0.5]  # [1, 0.0, 0.5, 50]
     step = 0
-    for episode in range(total_episodes):
+    for episode in range(1, total_episodes+1):
+        if episode == total_episodes:  # Test
+            agent.epsilon_final = 0.
+            agent.epsilon = 0.
+            agent.noise = None
+        env.reset()
         state = init_state
         done = False
-        state = np.array(init_state, dtype=np.float32)
+        state = np.array(state, dtype=np.float32)
 
         print("service name:", env.service_name, " episode:", episode)
-        act, act_param, all_action_parameters = agent.act(state)  # act : 0  act_param : -0.79951,-0.97346,0.86144
+        act, act_param, all_action_parameters = agent.act(state)
         action = pad_action(act, act_param)
         # print(action[0], action[1][action[0]][0])
 
@@ -547,6 +518,8 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                     done = False
 
                 next_state, reward, reward_perf, reward_res = env.step(action, event, done)
+                # print("service name:", env.service_name, "action: ", action[0] + 1, round(action[1][action[0]][0], 2))
+
                 # Covert np.float32
                 next_state = np.array(next_state, dtype=np.float32)
                 next_act, next_act_param, next_all_action_parameters = agent.act(next_state)  # next_act: 2 # next_act_param: 0.85845 # next_all_action_parameters: -0.79984,-0.97112,0.85845
@@ -566,23 +539,12 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
                 step += 1
                 event_timestamp_Ccontrol.clear()
-
             if done:
                 break
-    print(agent.updates)
+
+    agent.save_models(result_dir)
     end_time = time.time()
     print(end_time-start_time)
-
-
-    # if evaluation_episodes > 0:
-    #     print("Evaluating agent over {} episodes".format(evaluation_episodes))
-    #     agent.epsilon_final = 0.
-    #     agent.epsilon = 0.
-    #     agent.noise = None
-    #     evaluation_returns = evaluate(env, agent, evaluation_episodes)
-    #     print("Ave. evaluation return =", sum(evaluation_returns) / len(evaluation_returns))
-    #     np.save(os.path.join(dir, title + "{}e".format(str(seed))), evaluation_returns)
-
 
 
 start_time = time.time()

@@ -168,21 +168,21 @@ class PDQNAgent:
         self.num_actions = action_space
         self.action_parameter_sizes = np.array([1 for i in range(1,self.num_actions+1)])
         self.action_parameter_size = int(self.action_parameter_sizes.sum())
-        print("====================================================")
-        print(self.action_parameter_sizes, self.action_parameter_size)
+        # print("====================================================")
+        # print(self.action_parameter_sizes, self.action_parameter_size)
         # self.action_max = torch.from_numpy(np.ones((self.num_actions,))).float().to(device)
         # self.action_min = -self.action_max.detach()
         # self.action_range = (self.action_max-self.action_min).detach()
-        print(np.array([1.], dtype=np.float32) for i in range(1, self.num_actions + 1))
+        # print(np.array([1.], dtype=np.float32) for i in range(1, self.num_actions + 1))
         self.action_parameter_max_numpy = np.concatenate([np.array([1.], dtype=np.float32) for i in range(1, self.num_actions+1)]).ravel()  # 1 : para max
         self.action_parameter_min_numpy = np.concatenate([np.array([0.5], dtype=np.float32) for i in range(1, self.num_actions+1)]).ravel()  # 0 : para min
         self.action_parameter_range_numpy = (self.action_parameter_max_numpy - self.action_parameter_min_numpy)
         self.action_parameter_max = torch.from_numpy(self.action_parameter_max_numpy).float().to(device)
         self.action_parameter_min = torch.from_numpy(self.action_parameter_min_numpy).float().to(device)
         self.action_parameter_range = torch.from_numpy(self.action_parameter_range_numpy).float().to(device)
-        print("----------------------------------------------------------------------------------------------")
-        print(self.action_parameter_max_numpy, self.action_parameter_min_numpy, self.action_parameter_range_numpy,
-              self.action_parameter_max, self.action_parameter_min, self.action_parameter_range)
+        # print("----------------------------------------------------------------------------------------------")
+        # print(self.action_parameter_max_numpy, self.action_parameter_min_numpy, self.action_parameter_range_numpy,
+        #      self.action_parameter_max, self.action_parameter_min, self.action_parameter_range)
 
         self.epsilon = epsilon_initial
         self.epsilon_initial = epsilon_initial
@@ -218,7 +218,7 @@ class PDQNAgent:
 
         self.use_ornstein_noise = use_ornstein_noise
         self.noise = OrnsteinUhlenbeckActionNoise(self.action_parameter_size, random_machine=self.np_random, mu=0., theta=0.15, sigma=0.0001) #, theta=0.01, sigma=0.01)
-        print(self.num_actions+self.action_parameter_size)
+        # print(self.num_actions+self.action_parameter_size)
 
         self.replay_memory = Memory(replay_memory_size, (observation_space,), (1+self.action_parameter_size,), next_actions=False)
         self.actor = actor_class(self.observation_space, self.num_actions, self.action_parameter_size, **actor_kwargs).to(device)
