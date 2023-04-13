@@ -192,16 +192,14 @@ def parse_episods_data(episods_data, service_name):
             reward.append(parsed_line[4])  # cost = -reward
             tmp_step +=1
         # episode_reward.append(sum(reward)/len(reward))
-    # reward[851:871] = [reward[i] + 0.06 for i in range(851, 871)]
-    # reward[871:] = [reward[i] + 0.08 for i in range(871, len(reward))]
+
     resource_use = [x * y for x, y in zip(replicas, cpus)]
     replicas_ = moving_average(replicas)
     cpu_utilization_ = moving_average(cpu_utilization)
     cpus_ = moving_average(cpus)
     reward_ = moving_average(reward)
     resource_use_ = moving_average(resource_use)
-    # plot_lsit = [replica, cpu_utilization, cpus, reward, resource_use]
-    # new_step = [i*30 for i in step]
+
 
     fig_add_Cpus(step, cpus, service_name)
     fig_add_Replicas(step, replicas, service_name)
@@ -311,7 +309,7 @@ for path in path_list:
             rt_sum = 0
             for j in range(i, i + 5):
                 rt_sum += float(response_time[j])
-            y.append(rt_sum / 5 * 1000 -5)
+            y.append(rt_sum / 5 * 1000)
             x.append(tmp1)
             tmp1 += 1
         y_m = moving_average(y)
