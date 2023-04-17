@@ -9,12 +9,12 @@ import random
 import os
 
 # define result path
-result_dir = "./static_result/result60/"
+result_dir = "./static_result/result4/"
 
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
 data_rate = 50  # use static request rate
-use_tm = 0  # use dynamic traffi4
+use_tm = 0  # use dynamic traffic
 error_rate = 0.2   # 0.2/0.5
 
 ## initial
@@ -29,8 +29,8 @@ send_finish = 0
 timestamp = 0
 RFID = 0
 
-ip = "192.168.99.121"  # app_mn1
-ip1 = "192.168.99.122"  # app_mn2
+ip = "192.168.99.108"  # app_mn1
+ip1 = "192.168.99.110"  # app_mn2
 url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
 
 
@@ -112,11 +112,9 @@ def store_cpu(start_time, woker_name):
                 name = my_json['Name'].split(".")[0]
                 cpu = my_json['CPUPerc'].split("%")[0]
                 if float(cpu) > 0:
-                    final_time = time.time()
-                    t = final_time - start_time
                     path = result_dir + name + "_cpu.txt"
                     f = open(path, 'a')
-                    data = str(timestamp) + ' ' + str(t) + ' '
+                    data = str(timestamp) + ' '
                     # for d in state_u:
                     data = data + str(cpu) + ' ' + '\n'
                     f.write(data)
@@ -126,8 +124,9 @@ def store_cpu(start_time, woker_name):
 def store_rt(timestamp, response, rt):
     path = result_dir + "app_mn1_response.txt"
     f = open(path, 'a')
-    data = str(timestamp) + ' ' + str(response) + ' ' + str(rt) + '\n'
-    f.write(data)
+    for i in range(len(timestamp)):
+        data = str(timestamp[i]) + ' ' + str(response[i]) + ' ' + str(rt[i]) + '\n'
+        f.write(data)
     f.close()
 
 # sned request to app_mn2 app_mnae1 app_mnae2
@@ -209,7 +208,9 @@ def send_request(url, stage, request_num, start_time):
     global timestamp, use_tm, RFID
 
     error = 0
-
+    all_rt = []
+    all_timestamp = []
+    all_response = []
     for i in request_num:
 
         print("timestamp: ", timestamp)
@@ -228,7 +229,9 @@ def send_request(url, stage, request_num, start_time):
                 # print(response)
                 t_time = time.time()
                 rt = t_time - s_time
-                store_rt(timestamp, response, rt)
+                all_timestamp.append(timestamp)
+                all_response.append(response)
+                all_rt.append(rt)
                 RFID += 1
 
             except:
@@ -243,7 +246,7 @@ def send_request(url, stage, request_num, start_time):
                 time.sleep(1 / i)  # send requests every 1s
 
         timestamp += 1
-
+    store_rt(all_timestamp, all_response, all_rt)
     final_time = time.time()
     alltime = final_time - start_time
     print('time:: ', alltime)

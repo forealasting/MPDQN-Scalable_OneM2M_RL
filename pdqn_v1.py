@@ -43,7 +43,7 @@ class QActor(nn.Module):
 
     def forward(self, state, action_parameters):
         # implement forward
-        negative_slope = 0.01
+        # negative_slope = 0.01
 
         x = torch.cat((state, action_parameters), dim=1)
         num_layers = len(self.layers)

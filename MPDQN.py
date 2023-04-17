@@ -17,7 +17,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 0  # if use_tm
-result_dir = "./mpdqn_result/result2/"
+result_dir = "./mpdqn_result/database1/"
 
 ## initial
 request_num = []
@@ -52,14 +52,15 @@ Rmax_mn2 = 20
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
 Training_episodes = 8
-Test_episodes = 1
+Test_episodes = 0
+if_test = False
 total_episodes = Training_episodes + Test_episodes      # Total episodes
 multipass = True  # False : PDQN  / Ture: MPDQN
 
 # Exploration parameters
 epsilon_steps = 840
 epsilon_initial = 1
-epsilon_final = 0.01
+epsilon_final = 1
 
 # Learning rate
 tau_actor = 0.1
@@ -67,9 +68,9 @@ tau_actor_param = 0.01
 learning_rate_actor = 0.001
 learning_rate_actor_param = 0.001
 gamma = 0.9                 # Discounting rate
-replay_memory_size = 100  # Replay memory
+replay_memory_size = 1000  # Replay memory
 batch_size = 8
-initial_memory_threshold = 8  # Number of transitions required to start learning
+initial_memory_threshold = 100000  # Number of transitions required to start learning
 use_ornstein_noise = False
 clip_grad = 10
 layers = [64,]
@@ -198,9 +199,9 @@ class Env:
             for line in f:
                 s = line.split(' ')
                 time.append(float(s[0]))
-                cpu.append(float(s[2]))
+                cpu.append(float(s[1]))
 
-            last_avg_cpu = statistics.mean(cpu[-5:])
+            last_avg_cpu = statistics.mean(cpu[-10:])
             f.close()
 
             return last_avg_cpu
@@ -221,14 +222,14 @@ class Env:
         self.cpus = round(action_cpus, 2)
         # print(self.replica, self.cpus)
         change = 1
-        cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
-        cmd1 = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
+        cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
+        cmd1 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
         returned_text = subprocess.check_output(cmd, shell=True)
         returned_text = subprocess.check_output(cmd1, shell=True)
 
         if self.service_name == 'app_mn1':
             time.sleep(5)  # wait app_mn1 service start
-        time.sleep(40)  # wait service start
+        time.sleep(30)  # wait service start
 
         if not done:
             # print(self.service_name, "_done: ", done)
@@ -236,14 +237,14 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(20)
+        time.sleep(30)
         for i in range(5):
             # time.sleep(1)
             response_time_list.append(self.get_response_time())
 
         if done:
             # print(self.service_name, "_done: ", done)
-            time.sleep(10)
+            time.sleep(5)
             event.set()  # if done and after get_response_time
         # mean_response_time = sum(response_time_list)/len(response_time_list)
         # print(response_time_list)
@@ -279,7 +280,7 @@ class Env:
         next_state.append(u/10/self.cpus)
         # next_state.append(u/10)
         next_state.append(self.cpus)
-        next_state.append(request_num[timestamp])
+        # next_state.append(request_num[timestamp])
 
         # cost function
         w_pref = 0.5
@@ -313,11 +314,9 @@ def store_cpu(start_time, woker_name):
                 name = my_json['Name'].split(".")[0]
                 cpu = my_json['CPUPerc'].split("%")[0]
                 if float(cpu) > 0:
-                    final_time = time.time()
-                    t = final_time - start_time
                     path = result_dir + name + "_cpu.txt"
                     f = open(path, 'a')
-                    data = str(timestamp) + ' ' + str(t) + ' '
+                    data = str(timestamp) + ' '
                     # for d in state_u:
                     data = data + str(cpu) + ' ' + '\n'
 
@@ -493,7 +492,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     init_state = [1, 0.0, 0.5]  # [1, 0.0, 0.5, 50]
     step = 0
     for episode in range(1, total_episodes+1):
-        if episode == total_episodes:  # Test
+        if (episode == total_episodes) and if_test:  # Test
             agent.epsilon_final = 0.
             agent.epsilon = 0.
             agent.noise = None
@@ -528,13 +527,14 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 agent.step(state, (act, all_action_parameters), reward, next_state,
                            (next_act, next_all_action_parameters), done)
                 act, act_param, all_action_parameters = next_act, next_act_param, next_all_action_parameters
-                action = next_action
-                state = next_state
+
                 print("service name:", env.service_name, "action: ", action[0]+1, round(action[1][action[0]][0], 2), " step: ", step,
                       " next_state: ",
                       next_state, " reward: ", reward, " done: ", done, "epsilon", agent.epsilon)
                 store_trajectory(env.service_name, step, state, action[0]+1, round(action[1][action[0]][0], 2), reward, reward_perf, reward_res,
                                  next_state, done)
+                action = next_action
+                state = next_state
                 agent.epsilon_decay()
 
                 step += 1
