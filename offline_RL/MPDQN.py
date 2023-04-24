@@ -16,8 +16,8 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/result3/"
+use_tm = 0  # if use_tm
+result_dir = "./mpdqn_result/database1/"
 
 ## initial
 request_num = []
@@ -52,15 +52,15 @@ Rmax_mn2 = 20
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
 Training_episodes = 8
-Test_episodes = 1
-if_test = True
+Test_episodes = 0
+if_test = False
 total_episodes = Training_episodes + Test_episodes      # Total episodes
 multipass = True  # False : PDQN  / Ture: MPDQN
 
 # Exploration parameters
 epsilon_steps = 840
 epsilon_initial = 1
-epsilon_final = 0.01
+epsilon_final = 1
 
 # Learning rate
 tau_actor = 0.1

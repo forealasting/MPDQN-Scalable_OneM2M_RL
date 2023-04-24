@@ -22,7 +22,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1 # if use_tm
-result_dir = "./dqn_result/database/"
+result_dir = "./dqn_result/dqn_result17/"
 
 ## initial
 request_num = []
@@ -56,13 +56,13 @@ Rmax_mn2 = 20
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 10       # Total episodes
+total_episodes = 8       # Total episodes
 learning_rate = 0.01          # Learning rate
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
-min_epsilon = 1   # 0.01
-epsilon_decay = 0  # 1/849
+min_epsilon = 0
+epsilon_decay = 1/840
 memory_size = 100
 batch_size = 8
 target_update = 100

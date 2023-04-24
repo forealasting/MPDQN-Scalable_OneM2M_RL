@@ -1,9 +1,3 @@
-#  troch
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-
 import requests
 import time
 import threading
@@ -12,7 +6,7 @@ import json
 import numpy as np
 import random
 import statistics
-from typing import Dict, List, Tuple
+import copy
 import os
 import datetime
 import concurrent.futures
@@ -21,55 +15,53 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 1 # if use_tm
-result_dir = "./dqn_result/database/"
+use_tm = 0  # if use_tm
+# define result path
+result_dir = "./all_result/qlearning_result5/"
+
 
 ## initial
 request_num = []
 # timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
 # learning step:          0,  ..., 1,     , 120
-#
-simulation_time = 3602  # 300 s  # 0 ~ 3601:  3600
+
+simulation_time = 3602  # 0 ~ 3601:  3602
 request_n = simulation_time
+
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
 reset_complete = 0
 send_finish = 0
 timestamp = 0  # plus 1 in funcntion : send_request
-RFID = 0  # random number for data
+
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
+Rmax_mn1 = 30
+Rmax_mn2 = 20
 
 # Need modify ip if ip change
 ip = "192.168.99.124"  # app_mn1
 ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
-Rmax_mn1 = 30
-Rmax_mn2 = 20
 
 
 ## Learning parameter
-# S ={k, u , c, r}
+# S ={k, u , c}
 # k (replica): 1 ~ 3                          actual value : same
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 10       # Total episodes
+total_episodes = 8            # Total episodes
 learning_rate = 0.01          # Learning rate
+# max_steps = 121              # Max steps per episode
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
-min_epsilon = 1   # 0.01
-epsilon_decay = 0  # 1/849
-memory_size = 100
-batch_size = 8
-target_update = 100
-
-seed = 9
-torch.manual_seed(seed)
-np.random.seed(seed)
+min_epsilon = 0
+epsilon_decay = 1/840
+RFID = 0
 
 
 # check result directory
@@ -79,6 +71,7 @@ if os.path.exists(result_dir):
 
 # build dir
 os.mkdir(result_dir)
+
 # store setting
 path = result_dir + "setting.txt"
 f = open(path, 'a')
@@ -93,25 +86,22 @@ data += 'gamma ' + str(gamma) + '\n'
 data += 'max_epsilon ' + str(max_epsilon) + '\n'
 data += 'min_epsilon ' + str(min_epsilon) + '\n'
 data += 'epsilon_decay ' + str(epsilon_decay) + '\n'
-data += 'memory_size ' + str(memory_size) + '\n'
-data += 'batch_size ' + str(batch_size) + '\n'
-data += 'loss function ' + "smooth l1 loss" + '\n'
-data += 'target_update ' + str(target_update) + '\n'
+
 f.write(data)
 f.close()
 
-
-## 7/8 stage
+##  stage
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request12.txt')
+    #   Modify the workload path if it is different
+    f = open('request/request10.txt')
 
     for line in f:
         if len(request_num) < request_n:
 
-            request_num.append(int(float(line)))
+            request_num.append(int(line))
 else:
     request_num = [data_rate for i in range(simulation_time)]
 
@@ -127,13 +117,11 @@ class Env:
         self.cpus = 0.5
         self.replica = 1
         self.cpu_utilization = 0.0
-        self.state_space = [1, 0.0, 0.5, 10]
-        self.n_state = len(self.state_space)
         self.action_space = ['-r', '-1', '0', '1', 'r']
         self.n_actions = len(self.action_space)
 
-        # Need modify ip if container name change
-        self.url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
+        # Need modify ip if ip change
+        self.url_list = url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
                                     "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container",
                                     "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
@@ -237,7 +225,7 @@ class Env:
                 returned_text = subprocess.check_output(cmd, shell=True)
 
         if self.service_name == 'app_mn1':
-            time.sleep(5)  # wait app_mn1 service start
+            time.sleep(10) # wait app_mn2 service start
         time.sleep(30)  # wait service start
 
         if not done:
@@ -246,16 +234,16 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(20)
+        time.sleep(25)
         for i in range(5):
-            # time.sleep(1)
+            time.sleep(1)
             response_time_list.append(self.get_response_time())
 
         if done:
             # print(self.service_name, "_done: ", done)
             time.sleep(10)
             event.set()  # if done and after get_response_time
-        # mean_response_time = sum(response_time_list)/len(response_time_list)
+        # avg_response_time = sum(response_time_list)/len(response_time_list)
         # print(response_time_list)
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
@@ -283,17 +271,17 @@ class Env:
         data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
         f1.write(data)
         f1.close()
+
         u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
         next_state.append(u/10/self.cpus)
         next_state.append(self.cpus)
-        next_state.append(request_num[timestamp])
-        # next_state.append(req)
+        # state.append(req)
 
         # cost function
         w_pref = 0.5
         w_res = 0.5
-        c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
+        c_perf = 0 + ((c_perf - math.exp(-50 / t_max)) / (1 - math.exp(-50 / t_max))) * (1 - 0)
         c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
@@ -301,228 +289,62 @@ class Env:
         return next_state, reward, reward_perf, reward_res
 
 
-class ReplayBuffer:
-    """A simple numpy replay buffer."""
+class QLearningTable:
 
-    def __init__(self, obs_dim: int, size: int, batch_size: int = 32):
-        self.obs_buf = np.zeros([size, obs_dim], dtype=np.float32)
-        self.next_obs_buf = np.zeros([size, obs_dim], dtype=np.float32)
-        self.acts_buf = np.zeros([size], dtype=np.float32)
-        self.rews_buf = np.zeros([size], dtype=np.float32)
-        self.done_buf = np.zeros(size, dtype=np.float32)
-        self.max_size, self.batch_size = size, batch_size
-        self.ptr, self.size, = 0, 0
-
-    def store(
-        self,
-        obs: np.ndarray,
-        act: np.ndarray,
-        rew: float,
-        next_obs: np.ndarray,
-        done: bool,
-    ):
-        self.obs_buf[self.ptr] = obs
-        self.next_obs_buf[self.ptr] = next_obs
-        self.acts_buf[self.ptr] = act
-        self.rews_buf[self.ptr] = rew
-        self.done_buf[self.ptr] = done
-        self.ptr = (self.ptr + 1) % self.max_size
-        self.size = min(self.size + 1, self.max_size)
-
-    def sample_batch(self) -> Dict[str, np.ndarray]:
-        idxs = np.random.choice(self.size, size=self.batch_size, replace=False)
-        return dict(obs=self.obs_buf[idxs],
-                    next_obs=self.next_obs_buf[idxs],
-                    acts=self.acts_buf[idxs],
-                    rews=self.rews_buf[idxs],
-                    done=self.done_buf[idxs])
-
-    def __len__(self) -> int:
-        return self.size
-
-
-class Network(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int):
-        """Initialization."""
-        super(Network, self).__init__()
-
-        self.layers = nn.Sequential(
-            nn.Linear(in_dim, 64),
-            nn.ReLU(),
-            nn.Linear(64, out_dim)
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward method implementation."""
-        return self.layers(x)
-
-
-class DQNAgent:
-    def __init__(
-            self,
-            env,  # need change
-            memory_size: int,
-            batch_size: int,
-            target_update: int,
-            epsilon_decay: float,
-            max_epsilon: float = 1.0,
-            min_epsilon: float = 0.1,
-            gamma: float = 0.9,
-    ):
-
-        # obs_dim = env.observation_space.shape[0]
-        # action_dim = env.action_space.n
-        obs_dim = 4  # S = {k, u , c}  # S = {k, u , c, r}
-        action_dim = 5  # 𝐴={−𝑟, −1,  0,  1,  𝑟}
-
-        self.env = env
-        self.memory = ReplayBuffer(obs_dim, memory_size, batch_size)
-        self.batch_size = batch_size
+    def __init__(self, actions, learning_rate=0.01, gamma=0.9, max_epsilon=1, min_epsilon=0.1, epsilon_decay=1 / 300):
+        self.actions = actions
+        self.lr = learning_rate
+        self.gamma = gamma
         self.epsilon = max_epsilon
-        self.epsilon_decay = epsilon_decay
         self.max_epsilon = max_epsilon
         self.min_epsilon = min_epsilon
-        self.target_update = target_update
-        self.gamma = gamma
+        self.epsilon_decay = epsilon_decay
+        self.q_table = np.full((10, 11, 10, 5), -np.iinfo(np.int32).max)  # -2147483647
 
-        # device: cpu / gpu
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )
-        print(self.device)
-
-        # networks: dqn, dqn_target
-        self.dqn = Network(obs_dim, action_dim).to(self.device)
-        self.dqn_target = Network(obs_dim, action_dim).to(self.device)
-        self.dqn_target.load_state_dict(self.dqn.state_dict())
-        self.dqn_target.eval()
-
-        # optimizer
-        self.optimizer = optim.Adam(self.dqn.parameters(), lr=0.01)
-
-        # transition to store in memory
-        self.transition = list()
-
-        # mode: train / test
-        self.is_test = False
-
-    def select_action(self, state: np.ndarray) -> np.ndarray:
-        """Select an action from the input state."""
+    def choose_action(self, state):
         available_actions = self.get_available_actions(state)
-        action_mask = np.isin(range(5), available_actions)
-        selected_action_idx = np.where(action_mask)[0]  # find True index
-
-        # epsilon greedy policy
-        if self.epsilon > np.random.random():
-            # print("random action")
-            selected_action = np.random.choice(selected_action_idx)
+        s = copy.deepcopy(state)
+        s[2] = int(s[2] * 10 - 1)
+        s[1] = int(s[1])
+        s[0] = int(s[0])-1
+        # action selection
+        if self.epsilon > np.random.uniform():
+            # choose random action
+            action = np.random.choice(available_actions)
         else:
-            q_values = self.dqn(torch.FloatTensor(state).to(self.device))
-            # print(q_values)
-            masked_q_values = torch.where(
-                torch.BoolTensor(action_mask).to(self.device),
-                q_values,
-                torch.tensor(-np.inf).to(self.device)
-            )
-            selected_action = masked_q_values.argmax()
-        selected_action = selected_action.item()
-        if not self.is_test:
-            self.transition = [state, selected_action]
+            # choose greedy action
+            q_values = self.q_table[s[0], s[1], s[2], :]
+            q_values[np.isin(range(5), available_actions, invert=True)] = -np.iinfo(np.int32).max
+            action = np.argmax(q_values)
 
-        return selected_action
+        return action
 
-    def step(self, action: np.ndarray, event,  done: bool) -> Tuple[np.ndarray, np.float64, np.float64, np.float64]:
-        """Take an action and return the response of the env."""
-        # next_state, reward, done, _ = self.env.step(action)
-        next_state, reward, reward_perf, reward_res = self.env.step(action, event,  done)
-        if not self.is_test:
-            self.transition += [reward, next_state, done]
-            self.memory.store(*self.transition)
+    def learn(self, state, a, r, next_state, done):
+        s = copy.deepcopy(state)
+        s_ = copy.deepcopy(next_state)
+        # state  = [1, 0.0, 0.5]
+        # transform state to index
+        s[2] = int(s[2] * 10 - 1)
+        s[1] = int(s[1])
+        s[0] = int(s[0]) - 1
 
-        return next_state, reward, reward_perf, reward_res
+        s_[2] = int(s_[2] * 10 - 1)
+        s_[1] = int(s_[1])
+        s_[0] = int(s_[0])-1
 
-    def update_model(self) -> float:
-        """Update the model by gradient descent."""
-        samples = self.memory.sample_batch()
+        q_predict = self.q_table[s[0], s[1], s[2], a]
+        if done:
+            q_target = r
+        else:
+            q_target = r + self.gamma * np.max(self.q_table[s_[0], s_[1], s_[2], :])
+        self.q_table[s[0], s[1], s[2], a] = q_predict + self.lr * (q_target - q_predict)
 
-        loss = self._compute_dqn_loss(samples)
-
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-        return loss.item()
-
-    def train(self, episodes: int, event,  plotting_interval: int = 200):
-        global timestamp, simulation_time, change, send_finish
-
-        """Train the agent."""
-        self.is_test = False
-        update_cnt = 0
-        epsilons = []
-        reward = 0
-        init_state = [1, 0.0, 0.5, 10]
-        init_state = np.array(init_state, dtype=float)
-        step = 0
-        for episode in range(episodes):
-            state = init_state
-            done = False
-            losses = []
-            rewards = []
-
-            # if self.env.service_name == "app_mn1":
-            #     print("service name:", self.env.service_name, " episode:", episode)
-            event_timestamp_Ccontrol.wait()
-            print("service name:", self.env.service_name, " episode:", episode)
-            while True:
-                # if training is ready
-                if len(self.memory) >= self.batch_size:
-                    # print("training")
-                    loss = self.update_model()
-                    losses.append(loss)
-                    store_loss(self.env.service_name, loss)
-                    update_cnt += 1
-
-                    # if hard update is needed
-                    if update_cnt % self.target_update == 0:
-                        self._target_hard_update()
-
-                if timestamp == 0:
-                    done = False
-                event_timestamp_Ccontrol.wait()
-                if (((timestamp - 1) % 30) == 0) and (not done):
-                    action = self.select_action(state)
-                    if timestamp == (simulation_time - 1):
-                        done = True
-                    else:
-                        done = False
-                    next_state, reward, reward_perf, reward_res = self.step(action, event, done)
-                    # if self.env.service_name == "app_mn1":
-                    print("service name:", self.env.service_name, "action: ", action, " step: ", step, " next_state: ",
-                          next_state, " reward: ", reward, " done: ", done)
-                    store_trajectory(self.env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
-                    state = next_state
-
-                    # linearly decrease epsilon
-                    self.epsilon = max(
-                        self.min_epsilon, self.epsilon - (
-                                self.max_epsilon - self.min_epsilon
-                        ) * self.epsilon_decay
-                    )
-                    epsilons.append(self.epsilon)
-
-                    step += 1
-                    event_timestamp_Ccontrol.clear()
-
-                if done:
-                    # state = self.env.reset()
-                    print("done")
-                    rewards.append(reward)
-                    break
-
-            # store_reward(self.env.service_name, avg_rewards)
-
-        torch.save(self.dqn, result_dir + self.env.service_name + '.pt')
-
+        # linearly decrease epsilon
+        self.epsilon = max(
+            self.min_epsilon, self.epsilon - (
+                    self.max_epsilon - self.min_epsilon
+            ) * self.epsilon_decay
+        )
 
     def get_available_actions(self, state):
         # S ={k, u , c}
@@ -543,57 +365,6 @@ class DQNAgent:
 
         return actions
 
-    def test(self):
-        """Test the agent."""
-        self.is_test = True
-
-        state = self.env.reset()
-        done = False
-        reward = 0
-
-        # frames = []
-
-        print("reward: ", reward)
-        # self.env.close()
-
-
-
-    def _compute_dqn_loss(self, samples: Dict[str, np.ndarray]) -> torch.Tensor:
-        """Return dqn loss."""
-        available_actions_batch = [self.get_available_actions(obs) for obs in samples["next_obs"]]
-        action_mask = np.array([np.isin(range(5), available_actions) for available_actions in available_actions_batch])
-
-        device = self.device  # for shortening the following lines
-        state = torch.FloatTensor(samples["obs"]).to(device)
-        next_state = torch.FloatTensor(samples["next_obs"]).to(device)
-        action = torch.LongTensor(samples["acts"].reshape(-1, 1)).to(device)
-        reward = torch.FloatTensor(samples["rews"].reshape(-1, 1)).to(device)
-        done = torch.FloatTensor(samples["done"].reshape(-1, 1)).to(device)
-
-        # G_t   = r + gamma * v(s_{t+1})  if state != Terminal
-        #       = r                       otherwise
-        curr_q_value = self.dqn(state).gather(1, action)
-        next_q_value = self.dqn_target(
-            next_state
-        )
-        masked_q_values = torch.where(
-            torch.BoolTensor(action_mask).to(self.device),
-            next_q_value,
-            torch.tensor(-np.inf).to(self.device)
-        )
-        masked_q_values = masked_q_values.detach().max(dim=1, keepdim=True)[0].detach()
-        mask = 1 - done
-        target = (reward + self.gamma * masked_q_values * mask).to(self.device)
-
-        # calculate dqn loss
-        # loss = F.mse_loss(curr_q_value, target)
-        loss = F.smooth_l1_loss(curr_q_value, target)
-
-        return loss
-
-    def _target_hard_update(self):
-        """Hard update: target <- local."""
-        self.dqn_target.load_state_dict(self.dqn.state_dict())
 
 def store_cpu(start_time, woker_name):
     global timestamp, cpus, change, reset_complete
@@ -629,8 +400,8 @@ def store_cpu(start_time, woker_name):
 
 # reset Environment
 def reset():
-    cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
-    cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
+    cmd1 = "sudo docker-machine ssh default docker service scale app_mn1=1"
+    cmd2 = "sudo docker-machine ssh default docker service scale app_mn2=1"
     cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn1"
     cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn2"
     subprocess.check_output(cmd1, shell=True)
@@ -645,15 +416,6 @@ def store_reward(service_name, reward):
     f = open(path, 'a')
     data = str(reward) + '\n'
     f.write(data)
-
-
-def store_loss(service_name, loss):
-    # Write the string to a text file
-    path = result_dir + service_name + "_loss.txt"
-    f = open(path, 'a')
-    data = str(loss) + '\n'
-    f.write(data)
-
 
 def store_trajectory(service_name, step, s, a, r, r_perf, r_res, s_, done):
     path = result_dir + service_name + "_trajectory.txt"
@@ -670,7 +432,6 @@ def store_error_count(error):
     f = open(path, 'a')
     data = str(error) + '\n'
     f.write(data)
-
 
 
 def post_url(url, RFID, content):
@@ -692,12 +453,13 @@ def post_url(url, RFID, content):
 
     return response
 
+
+
 def send_request(stage, request_num, start_time, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
     for episode in range(total_episodes):
-        timestamp = 0
         print("episode: ", episode)
         print("reset envronment")
         reset_complete = 0
@@ -706,6 +468,7 @@ def send_request(stage, request_num, start_time, total_episodes):
         print("reset envronment complete")
         reset_complete = 1
         send_finish = 0
+        timestamp = 0
         for i in request_num:
             # print("timestamp: ", timestamp)
             event_mn1.clear()
@@ -727,7 +490,10 @@ def send_request(stage, request_num, start_time, total_episodes):
                         content = "false"
                     else:
                         content = "true"
+                    s_time = time.time()
                     response = post_url(url1, RFID, content)
+                    t_time = time.time()
+                    rt = t_time - s_time
                     RFID += 1
 
                 except:
@@ -751,13 +517,57 @@ def send_request(stage, request_num, start_time, total_episodes):
     print('time:: ', alltime)
 
 
-
-def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event, service_name):
-    global timestamp, simulation_time, change, RFID, send_finish
+def q_learning(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, event, service_name):
+    global timestamp, simulation_time, change, send_finish
 
     env = Env(service_name)
-    agent = DQNAgent(env, memory_size, batch_size, target_update, epsilon_decay, max_epsilon, min_epsilon, gamma)
-    agent.train(total_episodes, event)
+    actions = list(range(env.n_actions))
+    RL = QLearningTable(actions, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay)
+    all_rewards = []
+    step = 0
+    init_state = [1, 0.0, 0.5]
+    done = False
+
+    for episode in range(total_episodes):
+        # initial observation
+        state = init_state
+        rewards = []  # record reward every episode
+        done = False
+        while True:
+            if timestamp == 0:
+                done = False
+            event_timestamp_Ccontrol.wait()
+            if (((timestamp - 1) % 30) == 0) and (not done):
+                # RL choose action based on state
+                action = RL.choose_action(state)
+
+                # agent take action and get next state and reward
+                # print("service_name: ", service_name, " timestamp: ", timestamp, " step: ", step)
+                if timestamp == (simulation_time-1):
+                    done = True
+                else:
+                    done = False
+
+                next_state, reward, reward_perf, reward_res = env.step(action, event, done)
+                print(service_name, "action: ", action, " step: ", step, " next_state: ", next_state, " reward: ", reward, " done: ", done)
+
+                store_trajectory(env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
+                rewards.append(reward)
+                # RL learn from this transition
+                RL.learn(state, action, reward, next_state, done)
+
+                # swap state
+                state = next_state
+                step += 1
+                if done:
+                    avg_rewards = sum(rewards)/len(rewards)
+                    break
+                event_timestamp_Ccontrol.clear()
+
+        store_reward(service_name, avg_rewards)
+        all_rewards.append(avg_rewards)
+    # episode end
+    print("service:", service_name, all_rewards)
 
 
 start_time = time.time()
@@ -765,8 +575,9 @@ start_time = time.time()
 t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
-t4 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event_mn1, 'app_mn1', ))
-t5 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event_mn2, 'app_mn2', ))
+t4 = threading.Thread(target=q_learning, args=(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, event_mn1, 'app_mn1', ))
+t5 = threading.Thread(target=q_learning, args=(total_episodes, learning_rate, gamma, max_epsilon, min_epsilon, epsilon_decay, event_mn2, 'app_mn2', ))
+
 
 t1.start()
 t2.start()
