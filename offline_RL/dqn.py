@@ -22,7 +22,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1 # if use_tm
-result_dir = "./dqn_result/dqn_result17/"
+result_dir = "./dqn_database/database1/"
 
 ## initial
 request_num = []

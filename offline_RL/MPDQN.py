@@ -11,14 +11,19 @@ import datetime
 import math
 from pdqn_v1 import PDQNAgent
 from pdqn_multipass import MultiPassPDQNAgent
+import re
 
 print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 0  # if use_tm
-result_dir = "./mpdqn_result/database1/"
+use_tm = 1  # if use_tm
+result_dir = "./mpdqn_result/result4/"
 
+tmp_dir = "mpdqn_database/database"
+# tmp_dir = "mpdqn_result/result1"
+path1 = tmp_dir + "/app_mn1_trajectory.txt"
+path2 = tmp_dir + "/app_mn2_trajectory.txt"
 ## initial
 request_num = []
 # timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
@@ -43,49 +48,49 @@ ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 Rmax_mn1 = 30
 Rmax_mn2 = 20
-
-
+learning_step = 2000  # 960
+offline_learning_complete = True
 ## Learning parameter
-# S ={k, u , c, r} {k, u , c}
+# S ={k, u , c, r}
 # k (replica): 1 ~ 3                          actual value : same
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-Training_episodes = 8
+Training_episodes = 1
 Test_episodes = 0
 if_test = False
 total_episodes = Training_episodes + Test_episodes      # Total episodes
 multipass = True  # False : PDQN  / Ture: MPDQN
+# Exploration parameters
+gamma = 0.9                 # Discounting rate
 
 # Exploration parameters
 epsilon_steps = 840
 epsilon_initial = 1
-epsilon_final = 1
+epsilon_final = 0.01
 
 # Learning rate
 tau_actor = 0.1
-tau_actor_param = 0.01
+tau_actor_param = 0.001
 learning_rate_actor = 0.001
-learning_rate_actor_param = 0.001
-gamma = 0.9                 # Discounting rate
-replay_memory_size = 1000  # Replay memory
-batch_size = 8
-initial_memory_threshold = 100000  # Number of transitions required to start learning
+learning_rate_actor_param = 0.0001
+
+replay_memory_size = 960  # Replay memory
+batch_size = 16
+initial_memory_threshold = 8  # Number of transitions required to start learning
 use_ornstein_noise = False
 clip_grad = 10
 layers = [64,]
 seed = 7
 
-
 action_input_layer = 0  # no use
-
 # check result directory
-if os.path.exists(result_dir):
-    print("Deleting existing result directory...")
-    raise SystemExit  # end process
-
-# build dir
-os.mkdir(result_dir)
+# if os.path.exists(result_dir):
+#     print("Existing result directory...")
+#     raise SystemExit  # end process
+#
+# # build dir
+# os.mkdir(result_dir)
 # store setting
 path = result_dir + "setting.txt"
 
@@ -106,7 +111,7 @@ settings = {
     'epsilon_final': epsilon_final,
     'replay_memory_size': replay_memory_size,
     'batch_size': batch_size,
-    'loss_function': 'smooth l1 loss',
+    'loss_function': 'MSE loss',
     'layers': layers
 }
 
@@ -121,7 +126,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request12.txt')
+    f = open('request/request13.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -132,6 +137,40 @@ else:
 
 print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
 
+
+def parse(p):
+    with open(p, "r") as f:
+        data = f.read().splitlines()
+        parsed_data = []
+        parsed_line = []
+
+        for line in data:
+            # parse data
+            match = re.match(
+                r"(\d+) \[(.+)\] (\d+) \[(.+)\] ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)", line)
+
+
+            # assert False
+            if match != None:
+                # Convert the parsing result to the corresponding Python object
+                # line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
+                #              float(match.group(4)), float(match.group(5)), float(match.group(6)),
+                #              json.loads("[" + match.group(7) + "]"), match.group(8) == "True"]  # for DQN/Qlearning
+                # line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
+                #              float(match.group(4)), json.loads("[" + match.group(5) + "]"), match.group(6) == "True"]
+
+                line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
+                             json.loads("[" + match.group(4) + "]"), float(match.group(5)), float(match.group(6)),
+                             float(match.group(7)), json.loads("[" + match.group(8) + "]"), match.group(9) == "True"]
+                parsed_line.append(line_data)
+
+                parsed_line.append(line_data)
+                # 9 8
+                if match.group(9) == "True":
+                    parsed_data.append(parsed_line)
+                    parsed_line = []
+
+    return parsed_data
 
 class Env:
 
@@ -237,9 +276,9 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(30)
+        time.sleep(20)
         for i in range(5):
-            # time.sleep(1)
+            time.sleep(1)
             response_time_list.append(self.get_response_time())
 
         if done:
@@ -356,10 +395,10 @@ def store_trajectory(service_name, step, s, a_r, a_c, r, r_perf, r_res, s_, done
     path = result_dir + service_name + "_trajectory.txt"
     tmp_s = list(s)
     tmp_s_ = list(s_)
+    a_c_ = list(a_c)
     f = open(path, 'a')
-    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a_r) + ' ' + str(a_c) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
+    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a_r) + ' ' + str(a_c_) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
     f.write(data)
-
 
 def store_error_count(error):
     # Write the string to a text file
@@ -487,9 +526,66 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                                            'output_layer_init_std': 0.0001},
                        seed=seed)
     # print(agent)
+    # --------------------- offline training
+    if not offline_learning_complete:
+        tmp_step = 0
+        steps = []
+        states = []
+        acts = []
+        all_action_parameterss = []
+        rewards = []
+        next_states = []
+        terminals = []
+        if env.service_name == "app_mn1":
+            path = path1
+        else:
+            path = path2
+        episods_data = parse(path)
+        # print(len(episods_data))
+        for episode in range(1, total_episodes + 1):
+            for parsed_line in episods_data[episode - 1]:
+                # parsed_line = episods_data[episode-1]
+                # step.append(parsed_line[0])
+                steps.append(tmp_step)
+                tmp_step += 1
+                states.append(parsed_line[1])
+                acts.append(parsed_line[2])
+                all_action_parameterss.append(parsed_line[3])
+                rewards.append(parsed_line[4])  # cost = -reward
+                next_states.append(parsed_line[7])
+                terminals.append(parsed_line[8])
+
+        for i in range(len(steps)):
+            state = states[i]
+            state = np.array(state, dtype=np.float32)
+            act = acts[i] - 1
+            # print(all_action_parameterss[i])
+            all_action_parameters = all_action_parameterss[i]
+            # all_action_parameters = np.random.uniform(0.5, 1.0, size=(1, 3))
+            # all_action_parameters[0][act - 1] = tmp_parameters
+            # all_action_parameters = all_action_parameters.tolist()[0]
+            # print(act, all_action_parameters)
+
+            reward = float(rewards[i])
+
+            next_state = next_states[i]
+            next_state = np.array(next_state, dtype=np.float32)
+            terminal = terminals[i]
+            agent._add_sample(state, np.concatenate(([act], all_action_parameters)).ravel(), reward, next_state,
+                              terminal=terminal)
+
+        step = 0
+        # for episode in range(total_episodes):
+        for i in range(learning_step):
+            print("service name:", env.service_name, " step:", i)
+            agent._optimize_td_loss()
+            step += 1
+        agent.save_models(result_dir + env.service_name + "_" + str(seed))
+
+    agent.load_models(result_dir + env.service_name + "_" + str(seed))
 
     start_time = time.time()
-    init_state = [1, 0.0, 0.5]  # [1, 0.0, 0.5, 50]
+    init_state = [1, 0.3, 0.5]  # [1, 0.0, 0.5, 50]
     step = 0
     for episode in range(1, total_episodes+1):
         if (episode == total_episodes) and if_test:  # Test
@@ -522,27 +618,27 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 # Covert np.float32
                 next_state = np.array(next_state, dtype=np.float32)
                 next_act, next_act_param, next_all_action_parameters = agent.act(next_state)  # next_act: 2 # next_act_param: 0.85845 # next_all_action_parameters: -0.79984,-0.97112,0.85845
-
-                next_action = pad_action(next_act, next_act_param)
-                agent.step(state, (act, all_action_parameters), reward, next_state,
-                           (next_act, next_all_action_parameters), done)
-                act, act_param, all_action_parameters = next_act, next_act_param, next_all_action_parameters
-
-                print("service name:", env.service_name, "action: ", action[0]+1, round(action[1][action[0]][0], 2), " step: ", step,
+                print("service name:", env.service_name, "action: ", act + 1, act_param, all_action_parameters, " step: ", step,
                       " next_state: ",
                       next_state, " reward: ", reward, " done: ", done, "epsilon", agent.epsilon)
-                store_trajectory(env.service_name, step, state, action[0]+1, round(action[1][action[0]][0], 2), reward, reward_perf, reward_res,
+                store_trajectory(env.service_name, step, state, act + 1, all_action_parameters, reward, reward_perf,
+                                 reward_res,
                                  next_state, done)
+                next_action = pad_action(next_act, next_act_param)
+                # agent.step(state, (act, all_action_parameters), reward, next_state,
+                #            (next_act, next_all_action_parameters), done)
+                act, act_param, all_action_parameters = next_act, next_act_param, next_all_action_parameters
+                #
                 action = next_action
                 state = next_state
-                agent.epsilon_decay()
+                # agent.epsilon_decay()
 
                 step += 1
                 event_timestamp_Ccontrol.clear()
             if done:
                 break
 
-    agent.save_models(result_dir)
+    # agent.save_models(result_dir)
     end_time = time.time()
     print(end_time-start_time)
 

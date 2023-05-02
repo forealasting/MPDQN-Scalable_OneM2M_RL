@@ -7,7 +7,7 @@ dqn_result/
 static_result/
 dqn_result/
 mpdqn_result/
-
+mpdqn_database/
 # py
 
 q.py 

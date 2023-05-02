@@ -17,7 +17,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/result3/"
+result_dir = "./mpdqn_result/database/"
 
 ## initial
 request_num = []
@@ -53,7 +53,7 @@ Rmax_mn2 = 20
 # action_space = ['-r', -1, 0, 1, 'r']
 Training_episodes = 8
 Test_episodes = 1
-if_test = True
+if_test = False
 total_episodes = Training_episodes + Test_episodes      # Total episodes
 multipass = True  # False : PDQN  / Ture: MPDQN
 
@@ -69,8 +69,8 @@ learning_rate_actor = 0.001
 learning_rate_actor_param = 0.001
 gamma = 0.9                 # Discounting rate
 replay_memory_size = 1000  # Replay memory
-batch_size = 8
-initial_memory_threshold = 100000  # Number of transitions required to start learning
+batch_size = 16
+initial_memory_threshold = 16  # Number of transitions required to start learning
 use_ornstein_noise = False
 clip_grad = 10
 layers = [64,]
@@ -121,7 +121,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request12.txt')
+    f = open('request/request13.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -237,9 +237,9 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(30)
+        time.sleep(25)
         for i in range(5):
-            # time.sleep(1)
+            time.sleep(1)
             response_time_list.append(self.get_response_time())
 
         if done:
@@ -275,9 +275,9 @@ class Env:
         data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
         f1.write(data)
         f1.close()
-        u = self.discretize_cpu_value(self.cpu_utilization)
+        # u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
-        next_state.append(u/10/self.cpus)
+        next_state.append(self.cpu_utilization/100/self.cpus)
         # next_state.append(u/10)
         next_state.append(self.cpus)
         # next_state.append(request_num[timestamp])
@@ -356,8 +356,9 @@ def store_trajectory(service_name, step, s, a_r, a_c, r, r_perf, r_res, s_, done
     path = result_dir + service_name + "_trajectory.txt"
     tmp_s = list(s)
     tmp_s_ = list(s_)
+    a_c_ = list(np.concatenate(a_c))
     f = open(path, 'a')
-    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a_r) + ' ' + str(a_c) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
+    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a_r) + ' ' + str(a_c_) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
     f.write(data)
 
 
@@ -522,17 +523,17 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 # Covert np.float32
                 next_state = np.array(next_state, dtype=np.float32)
                 next_act, next_act_param, next_all_action_parameters = agent.act(next_state)  # next_act: 2 # next_act_param: 0.85845 # next_all_action_parameters: -0.79984,-0.97112,0.85845
-
+                print("service name:", env.service_name, "action: ", act, act_param, all_action_parameters, " step: ", step,
+                      " next_state: ",
+                      next_state, " reward: ", reward, " done: ", done, "epsilon", agent.epsilon)
+                store_trajectory(env.service_name, step, state, act + 1, all_action_parameters, reward, reward_perf,
+                                 reward_res,
+                                 next_state, done)
                 next_action = pad_action(next_act, next_act_param)
                 agent.step(state, (act, all_action_parameters), reward, next_state,
                            (next_act, next_all_action_parameters), done)
                 act, act_param, all_action_parameters = next_act, next_act_param, next_all_action_parameters
 
-                print("service name:", env.service_name, "action: ", action[0]+1, round(action[1][action[0]][0], 2), " step: ", step,
-                      " next_state: ",
-                      next_state, " reward: ", reward, " done: ", done, "epsilon", agent.epsilon)
-                store_trajectory(env.service_name, step, state, action[0]+1, round(action[1][action[0]][0], 2), reward, reward_perf, reward_res,
-                                 next_state, done)
                 action = next_action
                 state = next_state
                 agent.epsilon_decay()

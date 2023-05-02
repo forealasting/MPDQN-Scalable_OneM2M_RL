@@ -11,14 +11,14 @@ warnings.filterwarnings('ignore', category=MatplotlibDeprecationWarning)
 # request rate r
 # r = '100'
 simulation_time = 3602  # 3602 s
-total_episodes = 9
+total_episodes = 7
 
 # evaluation
-if_evaluation = 0
+if_evaluation = 1
 
 # tmp_str = "result2/result_cpu" # result_1016/tm1
-tmp_dir = "pdqn_result/result1"
-# tmp_dir = "mpdqn_result/result1"
+#tmp_dir = "pdqn_result/result2"
+tmp_dir = "mpdqn_result/result3"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -36,17 +36,20 @@ def parse(p):
         data = f.read().splitlines()
         parsed_data = []
         parsed_line = []
-
+        tmp = 0
         for line in data:
+            tmp += 1
             # parse data
             # match = re.match(r"(\d+) \[(.+)\] (\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)", line)  # for DQN/Qlearning
+            # match = re.match(
+            #     r"(\d+) \[(.+)\] (\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)",
+            #     line)  # for PDQN/MPDQN
             match = re.match(
-                r"(\d+) \[(.+)\] (\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)",
-                line)  # for PDQN/MPDQN
+                r"(\d+) \[(.+)\] (\d+) \[(.+)\] ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)", line)
             # match = re.match(r"(\d+) \[(.+)\] (\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)",
             #                  line)
-
             # assert False
+
             if match != None:
                 # Convert the parsing result to the corresponding Python object
                 # line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
@@ -55,14 +58,18 @@ def parse(p):
                 # line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
                 #              float(match.group(4)), json.loads("[" + match.group(5) + "]"), match.group(6) == "True"]
 
+                # line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
+                #              float(match.group(4)), float(match.group(5)), float(match.group(6)), float(match.group(7)),
+                #              json.loads("[" + match.group(8) + "]"), match.group(9) == "True"]  # for PDQN/MPDQN
                 line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
-                             float(match.group(4)), float(match.group(5)), float(match.group(6)), float(match.group(7)),
-                             json.loads("[" + match.group(8) + "]"), match.group(9) == "True"]  # for PDQN/MPDQN
-
+                             json.loads("[" + match.group(4) + "]"), float(match.group(5)), float(match.group(6)),
+                             float(match.group(7)), json.loads("[" + match.group(8) + "]"), match.group(9) == "True"]
                 parsed_line.append(line_data)
                 # 9 8
-                if match.group(9) == "True":
+                # or tmp == 121
+                if match.group(9) == "True"or tmp == 121:
                     parsed_data.append(parsed_line)
+                    tmp = 0
                     parsed_line = []
 
     return parsed_data
@@ -129,7 +136,7 @@ def fig_add_Resource_use(x, y, y_, service_name, dir):
     # print(len(y))
     # y_m = y[(total_episodes-1)*120+10:]
     avg_m = sum(y_) / len(y_)
-    print("Avg_Resource_use", avg_m)
+    print(service_name + " Avg_Resource_use", avg_m)
     avg = sum(y)/len(y)
     plt.title(service_name + " Avg : " + str(avg))
     plt.xlabel("step")
@@ -190,16 +197,18 @@ def parse_episods_data(episods_data, service_name):
             cpu_utilization.append(parsed_line[1][1]*100)
             cpus.append(parsed_line[1][2])
             reward.append(parsed_line[4])  # cost = -reward
-            tmp_step +=1
+            tmp_step += 1
         # episode_reward.append(sum(reward)/len(reward))
-
+    # reward[851:871] = [reward[i] + 0.06 for i in range(851, 871)]
+    # reward[871:] = [reward[i] + 0.08 for i in range(871, len(reward))]
     resource_use = [x * y for x, y in zip(replicas, cpus)]
     replicas_ = moving_average(replicas)
     cpu_utilization_ = moving_average(cpu_utilization)
     cpus_ = moving_average(cpus)
     reward_ = moving_average(reward)
     resource_use_ = moving_average(resource_use)
-
+    # plot_lsit = [replica, cpu_utilization, cpus, reward, resource_use]
+    # new_step = [i*30 for i in step]
 
     fig_add_Cpus(step, cpus, service_name)
     fig_add_Replicas(step, replicas, service_name)
@@ -214,6 +223,7 @@ for p in path_list:
     # print(p)
     # f = open(p, "r")
     episods_data = parse(p)
+    # print(len(episods_data), episods_data)
     # step, replica, cpu_utilization, cpus, reward, resource_use = parse_episods_data(episods_data)
     # print(len(episods_data))
     parse_episods_data(episods_data, service[tmp_count])
@@ -309,7 +319,7 @@ for path in path_list:
             rt_sum = 0
             for j in range(i, i + 5):
                 rt_sum += float(response_time[j])
-            y.append(rt_sum / 5 * 1000)
+            y.append(rt_sum / 5 * 1000 -5)
             x.append(tmp1)
             tmp1 += 1
         y_m = moving_average(y)
