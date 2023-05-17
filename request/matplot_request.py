@@ -9,7 +9,7 @@ use_tm = 1
 r = 300
 
 
-path1 = "request13.txt"
+path1 = "request12.txt"
 
 path_list = [path1]
 
@@ -60,9 +60,9 @@ plt.title("Workload")
 plt.xlabel("timestamp")
 plt.ylabel("Data rate(requests/s) ")
 plt.grid(True)
-plt.ylim(0,110)
+plt.ylim(0,60)
 # plt.legend()
-plt.savefig("Data_rate.png")
+plt.savefig("Data_rate.png", dpi=300)
 plt.show()
 
 

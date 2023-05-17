@@ -7,11 +7,10 @@ dqn_result/
 static_result/
 dqn_result/
 mpdqn_result/
+pdqn_result/
 mpdqn_database/
+test_code/
+
+
 # py
-
-q.py 
-test.py
-test3.py
-
 

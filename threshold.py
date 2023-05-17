@@ -9,17 +9,17 @@ import random
 import os
 
 # define result path
-result_dir = "./static_result/result58/"
+result_dir = "./static_result/result4/"
 
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
 data_rate = 50  # use static request rate
-use_tm = 0  # use dynamic traffi4
+use_tm = 0  # use dynamic traffic
 error_rate = 0.2   # 0.2/0.5
 
 ## initial
 request_num = []
-simulation_time = 100  # 300 s  # 3600s
+simulation_time = 300  # 300 s  # 3600s
 cpus = 0.5
 replica = 2
 
@@ -29,8 +29,8 @@ send_finish = 0
 timestamp = 0
 RFID = 0
 
-ip = "192.168.99.121"  # app_mn1
-ip1 = "192.168.99.122"  # app_mn2
+ip = "192.168.99.108"  # app_mn1
+ip1 = "192.168.99.110"  # app_mn2
 url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
 
 
@@ -112,11 +112,9 @@ def store_cpu(start_time, woker_name):
                 name = my_json['Name'].split(".")[0]
                 cpu = my_json['CPUPerc'].split("%")[0]
                 if float(cpu) > 0:
-                    final_time = time.time()
-                    t = final_time - start_time
                     path = result_dir + name + "_cpu.txt"
                     f = open(path, 'a')
-                    data = str(timestamp) + ' ' + str(t) + ' '
+                    data = str(timestamp) + ' '
                     # for d in state_u:
                     data = data + str(cpu) + ' ' + '\n'
                     f.write(data)
@@ -126,8 +124,9 @@ def store_cpu(start_time, woker_name):
 def store_rt(timestamp, response, rt):
     path = result_dir + "app_mn1_response.txt"
     f = open(path, 'a')
-    data = str(timestamp) + ' ' + str(response) + ' ' + str(rt) + '\n'
-    f.write(data)
+    for i in range(len(timestamp)):
+        data = str(timestamp[i]) + ' ' + str(response[i]) + ' ' + str(rt[i]) + '\n'
+        f.write(data)
     f.close()
 
 # sned request to app_mn2 app_mnae1 app_mnae2
@@ -209,7 +208,9 @@ def send_request(url, stage, request_num, start_time):
     global timestamp, use_tm, RFID
 
     error = 0
-
+    all_rt = []
+    all_timestamp = []
+    all_response = []
     for i in request_num:
 
         print("timestamp: ", timestamp)
@@ -228,7 +229,9 @@ def send_request(url, stage, request_num, start_time):
                 # print(response)
                 t_time = time.time()
                 rt = t_time - s_time
-                store_rt(timestamp, response, rt)
+                all_timestamp.append(timestamp)
+                all_response.append(response)
+                all_rt.append(rt)
                 RFID += 1
 
             except:
@@ -243,14 +246,14 @@ def send_request(url, stage, request_num, start_time):
                 time.sleep(1 / i)  # send requests every 1s
 
         timestamp += 1
-
+    store_rt(all_timestamp, all_response, all_rt)
     final_time = time.time()
     alltime = final_time - start_time
     print('time:: ', alltime)
     send_finish = 1
 
 
-def threshold_action():
+def manual_action():
     global cpus, T_max, type, change, send_finish, replicas
     global timestamp
 
@@ -287,17 +290,20 @@ t1 = threading.Thread(target=send_request, args=(url, stage, request_num, start_
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
 t4 = threading.Thread(target=store_rt2)
-t5 = threading.Thread(target=threshold_action)
+# t7 = threading.Thread(target=manual_action)
 
 t1.start()
 t2.start()
 t3.start()
 t4.start()
-t5.start()
-
+# t5.start()
+# t6.start()
+# t7.start()
 
 t1.join()
 t2.join()
 t3.join()
 t4.join()
-t5.join()
+# t5.join()
+# t6.join()
+# t7.join()

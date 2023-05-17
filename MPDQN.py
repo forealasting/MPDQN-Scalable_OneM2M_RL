@@ -17,7 +17,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/database/"
+result_dir = "./mpdqn_result/result7/"
 
 ## initial
 request_num = []
@@ -53,9 +53,9 @@ Rmax_mn2 = 20
 # action_space = ['-r', -1, 0, 1, 'r']
 Training_episodes = 8
 Test_episodes = 1
-if_test = False
+if_test = True
 total_episodes = Training_episodes + Test_episodes      # Total episodes
-multipass = True  # False : PDQN  / Ture: MPDQN
+multipass = False  # False : PDQN  / Ture: MPDQN
 
 # Exploration parameters
 epsilon_steps = 840
@@ -74,7 +74,7 @@ initial_memory_threshold = 16  # Number of transitions required to start learnin
 use_ornstein_noise = False
 clip_grad = 10
 layers = [64,]
-seed = 7
+seed = 9
 
 
 action_input_layer = 0  # no use
@@ -106,8 +106,9 @@ settings = {
     'epsilon_final': epsilon_final,
     'replay_memory_size': replay_memory_size,
     'batch_size': batch_size,
-    'loss_function': 'smooth l1 loss',
-    'layers': layers
+    'loss_function': 'MSE loss',
+    'layers': layers,
+    'if_test': if_test,
 }
 
 # Write settings to file
@@ -142,7 +143,7 @@ class Env:
         self.replica = 1
         self.cpu_utilization = 0.0
         self.action_space = ['1', '1', '1']
-        self.state_space = [1, 0.0, 0.5]  # [1, 0.0, 0.5, 10]
+        self.state_space = [1, 0.0, 0.5, 40]  # [1, 0.0, 0.5, 10]
         self.n_state = len(self.state_space)
         self.n_actions = len(self.action_space)
 
@@ -280,6 +281,7 @@ class Env:
         next_state.append(self.cpu_utilization/100/self.cpus)
         # next_state.append(u/10)
         next_state.append(self.cpus)
+        next_state.append(Rt)
         # next_state.append(request_num[timestamp])
 
         # cost function
@@ -356,7 +358,7 @@ def store_trajectory(service_name, step, s, a_r, a_c, r, r_perf, r_res, s_, done
     path = result_dir + service_name + "_trajectory.txt"
     tmp_s = list(s)
     tmp_s_ = list(s_)
-    a_c_ = list(np.concatenate(a_c))
+    a_c_ = list(a_c)
     f = open(path, 'a')
     data = str(step) + ' ' + str(tmp_s) + ' ' + str(a_r) + ' ' + str(a_c_) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
     f.write(data)
@@ -490,7 +492,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     # print(agent)
 
     start_time = time.time()
-    init_state = [1, 0.0, 0.5]  # [1, 0.0, 0.5, 50]
+    init_state = [1, 0.0, 0.5, 40]  # [1, 0.0, 0.5, 50]
     step = 0
     for episode in range(1, total_episodes+1):
         if (episode == total_episodes) and if_test:  # Test

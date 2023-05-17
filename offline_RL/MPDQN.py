@@ -18,9 +18,9 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/result4/"
+result_dir = "./mpdqn_result/result5/"
 
-tmp_dir = "mpdqn_database/database"
+tmp_dir = "mpdqn_database/database4"
 # tmp_dir = "mpdqn_result/result1"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
@@ -126,7 +126,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request13.txt')
+    f = open('request/request12.txt')
 
     for line in f:
         if len(request_num) < request_n:

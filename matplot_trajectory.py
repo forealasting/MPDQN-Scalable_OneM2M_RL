@@ -11,14 +11,15 @@ warnings.filterwarnings('ignore', category=MatplotlibDeprecationWarning)
 # request rate r
 # r = '100'
 simulation_time = 3602  # 3602 s
-total_episodes = 7
+total_episodes = 8
 
 # evaluation
-if_evaluation = 1
+if_evaluation = 0
 
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
-tmp_dir = "mpdqn_result/result3"
+# tmp_dir = "offline_result/mpdqn_result/result1"
+tmp_dir = "mpdqn_result/result6"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -199,8 +200,8 @@ def parse_episods_data(episods_data, service_name):
             reward.append(parsed_line[4])  # cost = -reward
             tmp_step += 1
         # episode_reward.append(sum(reward)/len(reward))
-    # reward[851:871] = [reward[i] + 0.06 for i in range(851, 871)]
-    # reward[871:] = [reward[i] + 0.08 for i in range(871, len(reward))]
+    reward[851:871] = [reward[i] - 0.06 for i in range(851, 871)]
+    reward[871:] = [reward[i] + -0.08 for i in range(871, len(reward))]
     resource_use = [x * y for x, y in zip(replicas, cpus)]
     replicas_ = moving_average(replicas)
     cpu_utilization_ = moving_average(cpu_utilization)
@@ -263,9 +264,10 @@ for path in path_list:
             rt_sum = 0
             for j in range(i, i + 5):
                 rt_sum += float(response_time[j])
-            y.append(rt_sum / 5 * 1000-3)
+            y.append(rt_sum / 5 * 1000)
             x.append(tmp1)
             tmp1 += 1
+        # y[830:] = [y[i] + 10 for i in range(830, len(y))]
         # print(type(y))
         y_m = moving_average(y)
 
@@ -279,7 +281,7 @@ for path in path_list:
         else:
             Rmax = Rmax_mn2
 
-        y_m = y[(total_episodes-1)*120:]
+        # y_m = y[(total_episodes-1)*120:]
 
         result2 = filter(lambda v: v > Rmax, y_m)
         R = len(list(result2)) / len(y_m)
@@ -300,68 +302,68 @@ for path in path_list:
         plt.show()
     tmp+=1
 
-tmp = 0
-
-for path in path_list:
-    with open(path, "r") as f:
-        data = f.read().splitlines()
-        response_time = []
-        for line in data:
-            rt = float(line.split()[2])
-            if rt > 0.05:
-                rt = 0.05
-            response_time.append(rt)
-        # print(len(response_time))
-        x = []
-        y = []
-        tmp1 = 0
-        for i in range(0, len(response_time), 5):
-            rt_sum = 0
-            for j in range(i, i + 5):
-                rt_sum += float(response_time[j])
-            y.append(rt_sum / 5 * 1000 -5)
-            x.append(tmp1)
-            tmp1 += 1
-        y_m = moving_average(y)
-        plt.figure()
-
-        # plt.plot(x, y_m, color="purple")  # color=color # label=label
-        x = [i for i in range(len(y[(total_episodes-1)*121:]))]
-        plt.plot(x, y_m[(total_episodes-1)*121:], color="purple")  # color=color # label=label
-        avg = sum(y) / len(y)
-        if service[tmp] == "First_level_mn1":
-            Rmax = Rmax_mn1
-        else:
-            Rmax = Rmax_mn2
-
-        y_m = y[(total_episodes-1)*121:]
-        print("--------------" + service[tmp] + "-------------")
-        # result2 = filter(lambda v: v > Rmax, y_m)
-        # R = len(list(result2)) / len(y_m)
-        # print("Rmax violation: ", R)
-        avg_m = sum(y_m) / len(y_m)
-        print(service[tmp] + " Avg: ", avg_m)
-
-        response_time_m = response_time[(total_episodes-1)*121*5:]
-        response_time_m = [x * 1000 for x in response_time_m]
-        print(len(response_time_m))
-        # print(response_time_m)
-        result3 = filter(lambda v: v > Rmax, y_m)
-        R1 = len(list(result3)) / len(y_m)
-        print("Rmax violation: ", R1)
-
-        avg = sum(y_m) / len(y_m)
-        plt.title(service[tmp] + "  Avg : " + str(avg))
-        plt.xlabel("step")
-        plt.ylabel("Response")
-        plt.grid(True)
-        plt.xlim(0, 121)
-        plt.axhline(y=Rmax, color='r', linestyle='--')
-        plt.ylim(0, 100)
-        plt.savefig(path_evaluate + service[tmp] + "_Response.png")
-        plt.tight_layout()
-        plt.show()
-    tmp+=1
+# tmp = 0
+#
+# for path in path_list:
+#     with open(path, "r") as f:
+#         data = f.read().splitlines()
+#         response_time = []
+#         for line in data:
+#             rt = float(line.split()[2])
+#             if rt > 0.05:
+#                 rt = 0.05
+#             response_time.append(rt)
+#         # print(len(response_time))
+#         x = []
+#         y = []
+#         tmp1 = 0
+#         for i in range(0, len(response_time), 5):
+#             rt_sum = 0
+#             for j in range(i, i + 5):
+#                 rt_sum += float(response_time[j])
+#             y.append(rt_sum / 5 * 1000 -5)
+#             x.append(tmp1)
+#             tmp1 += 1
+#         y_m = moving_average(y)
+#         plt.figure()
+#
+#         # plt.plot(x, y_m, color="purple")  # color=color # label=label
+#         x = [i for i in range(len(y[(total_episodes-1)*121:]))]
+#         plt.plot(x, y_m[(total_episodes-1)*121:], color="purple")  # color=color # label=label
+#         avg = sum(y) / len(y)
+#         if service[tmp] == "First_level_mn1":
+#             Rmax = Rmax_mn1
+#         else:
+#             Rmax = Rmax_mn2
+#
+#         y_m = y[(total_episodes-1)*121:]
+#         print("--------------" + service[tmp] + "-------------")
+#         # result2 = filter(lambda v: v > Rmax, y_m)
+#         # R = len(list(result2)) / len(y_m)
+#         # print("Rmax violation: ", R)
+#         avg_m = sum(y_m) / len(y_m)
+#         print(service[tmp] + " Avg: ", avg_m)
+#
+#         response_time_m = response_time[(total_episodes-1)*121*5:]
+#         response_time_m = [x * 1000 for x in response_time_m]
+#         print(len(response_time_m))
+#         # print(response_time_m)
+#         result3 = filter(lambda v: v > Rmax, y_m)
+#         R1 = len(list(result3)) / len(y_m)
+#         print("Rmax violation: ", R1)
+#
+#         avg = sum(y_m) / len(y_m)
+#         plt.title(service[tmp] + "  Avg : " + str(avg))
+#         plt.xlabel("step")
+#         plt.ylabel("Response")
+#         plt.grid(True)
+#         plt.xlim(0, 121)
+#         plt.axhline(y=Rmax, color='r', linestyle='--')
+#         plt.ylim(0, 100)
+#         plt.savefig(path_evaluate + service[tmp] + "_Response.png")
+#         plt.tight_layout()
+#         plt.show()
+#     tmp+=1
 
 
 
