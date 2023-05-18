@@ -9,7 +9,7 @@ import random
 import os
 
 # define result path
-result_dir = "./static_result/result62/"
+result_dir = "./static_result/result68/"
 
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
@@ -21,9 +21,8 @@ error_rate = 0.2   # 0.2/0.5
 request_num = []
 simulation_time = 100  # 300 s  # 3600s
 cpus1 = 0.5
-cpus2 = 0.5
 replica1 = 1
-replica2 = 1
+
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
 send_finish = 0
@@ -40,7 +39,6 @@ ip1 = "192.168.99.125"  # app_mn2
 ## 8 stage
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
-
 
 
 # check result directory
@@ -76,8 +74,11 @@ else:
 print('request_num:: ', len(request_num))
 
 
-def post_url(url, RFID, content):
-
+def post_url(url, RFID):
+    if error_rate > random.random():
+        content = "false"
+    else:
+        content = "true"
     headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
     data = {
         "m2m:cin": {
@@ -96,10 +97,10 @@ def post_url(url, RFID, content):
     return response
 
 
-def store_cpu(start_time, woker_name):
+def store_cpu(worker_name):
     global timestamp, change
 
-    cmd = "sudo docker-machine ssh " + woker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+    cmd = "sudo docker-machine ssh " + worker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
     while True:
         if send_finish == 1:
             break
@@ -114,14 +115,13 @@ def store_cpu(start_time, woker_name):
                 my_json = json.loads(my_data[i] + "}")
                 name = my_json['Name'].split(".")[0]
                 cpu = my_json['CPUPerc'].split("%")[0]
-                path = result_dir + name + "_cpu.txt"
-                f = open(path, 'a')
-                data = str(timestamp) + ' '
-                # for d in state_u:
-                data = data + str(cpu) + ' ' + '\n'
-                f.write(data)
-                f.close()
-
+                if float(cpu) > 0:
+                    path = result_dir + name + "_cpu.txt"
+                    f = open(path, 'a')
+                    data = str(timestamp) + ' '
+                    data = data + str(cpu) + ' ' + '\n'
+                    f.write(data)
+                    f.close()
 
 def store_rt(timestamp, response, rt):
     path = result_dir + "app_mn1_response.txt"
@@ -205,7 +205,7 @@ def store_rt2():
                 break
 
 
-def send_request(stage, request_num, start_time):
+def send_request(stage, request_num):
     global change, send_finish
     global timestamp, use_tm, RFID
 
@@ -217,25 +217,15 @@ def send_request(stage, request_num, start_time):
         print("timestamp: ", timestamp)
         exp = np.random.exponential(scale=1 / i, size=i)
         tmp_count = 0
-        event_mn1.clear()  # set flag to false
-        event_mn2.clear()  # set flag to false
-        if (timestamp % 30 == 0 and timestamp != 0):
-            print("wait mn1 mn2 step ...")
-            event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
-            event_mn2.wait()
-            change = 0
+
         for j in range(i):
             try:
                 # change stage
                 url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                 url1 = url + stage[(tmp_count * 10 + j) % 8]
-                if error_rate > random.random():
-                    content = "false"
-                else:
-                    content = "true"
+
                 s_time = time.time()
-                response = post_url(url1, RFID, content)
-                # print(response)
+                response = post_url(url1, RFID)
                 t_time = time.time()
                 rt = t_time - s_time
                 all_timestamp.append(timestamp)
@@ -256,116 +246,22 @@ def send_request(stage, request_num, start_time):
 
         timestamp += 1
     store_rt(all_timestamp, all_response, all_rt)
-    final_time = time.time()
-    alltime = final_time - start_time
-    print('time:: ', alltime)
     send_finish = 1
 
 
-def manual_action_mn1():
-    global T_max, type, change, send_finish, replica1, cpus1
-    global timestamp
-
-    change_check = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-    change_type = 3  # 1 : change cpus 2: change replica
-    while True:
-        if send_finish == 1:
-            break
-        print(timestamp)
-        if ((timestamp % 30) == 0) and (change_type == 3) and (timestamp != 0):
-            idx = int(timestamp / 30)
-            if change_check[idx] == 0:
-                change = 1
-                if cpus1 == 1:
-                    replica1 += 1
-                    cmd = "sudo docker-machine ssh default docker service scale app_mn1=" + str(replica1)
-                    returned_text = subprocess.check_output(cmd, shell=True)
-                    time.sleep(15)
-                    cpus1 = 0.5
-                cpus1 += 0.1
-                cpus1 = round(cpus1, 1)
-                cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(cpus1) + " app_mn1"
-                returned_text = subprocess.check_output(cmd, shell=True)
-
-                change_check[idx] = 1
-                print('change cpus1 to ', cpus1)
-                time.sleep(30)
-                event_mn1.set()
-                change = 0
-        # if ((timestamp % 50) == 0) and (change_type == 1) and (timestamp != 0):
-        #     idx = int(timestamp / 50)
-        #     if change_check[idx] == 0:
-        #         change = 1
-        #         cpus += 0.1
-        #         cpus = round(cpus, 1)
-        #         cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(cpus) + " app_mn1"
-        #         returned_text = subprocess.check_output(cmd, shell=True)
-        #         change_check[idx] = 1
-        #         print('change cpus to ', cpus)
-        #         time.sleep(30)
-        #         change = 0
-        # if (timestamp == 150) and (change_type == 2) and (timestamp != 0):
-        #     idx = int(timestamp/50)
-        #     if change_check[idx] == 0:
-        #         change = 1
-        #         replicas += 1
-        #         change_check[idx] = 1
-        #         cmd = "sudo docker-machine ssh default docker service scale app_mn1=" + str(replicas)
-        #         returned_text = subprocess.check_output(cmd, shell=True)
-        #         # print('change replicas to ', replicas)
-
-def manual_action_mn2():
-    global T_max, type, change, send_finish, replica2, cpus2
-    global timestamp
-
-    change_check = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-    change_type = 3  # 1 : change cpus 2: change replica
-    while True:
-        if send_finish == 1:
-            break
-        print(timestamp)
-        if ((timestamp % 30) == 0) and (change_type == 3) and (timestamp != 0):
-            idx = int(timestamp / 30)
-            if change_check[idx] == 0:
-                change = 1
-                if cpus2 == 1:
-                    replica2 += 1
-                    cmd = "sudo docker-machine ssh default docker service scale app_mn2=" + str(replica2)
-                    returned_text = subprocess.check_output(cmd, shell=True)
-                    time.sleep(15)
-                    cpus2 = 0.5
-                cpus2 += 0.1
-                cpus2 = round(cpus2, 1)
-                cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(cpus2) + " app_mn2"
-                returned_text = subprocess.check_output(cmd, shell=True)
-
-                change_check[idx] = 1
-                print('change cpus2 to ', cpus2)
-                time.sleep(30)
-                event_mn2.set()
-                change = 0
-
-
-start_time = time.time()
-
-t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, ))
-t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
-t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
+t1 = threading.Thread(target=send_request, args=(stage, request_num, ))
+t2 = threading.Thread(target=store_cpu, args=('worker',))
+t3 = threading.Thread(target=store_cpu, args=('worker1',))
 t4 = threading.Thread(target=store_rt2)
-t5 = threading.Thread(target=manual_action_mn1)
-t6 = threading.Thread(target=manual_action_mn2)
+
 
 t1.start()
 t2.start()
 t3.start()
 t4.start()
-# t5.start()
-# t6.start()
-
 
 t1.join()
 t2.join()
 t3.join()
 t4.join()
-# t5.join()
-# t6.join()
+

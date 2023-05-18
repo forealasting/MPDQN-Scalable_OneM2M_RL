@@ -22,7 +22,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1 # if use_tm
-result_dir = "./dqn_result/database/"
+result_dir = "./dqn_result/result12/"
 
 ## initial
 request_num = []
@@ -56,12 +56,12 @@ Rmax_mn2 = 20
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 10       # Total episodes
+total_episodes = 8       # Total episodes
 learning_rate = 0.01          # Learning rate
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
-min_epsilon = 1   # 0.01
+min_epsilon = 0.01   # 0.01
 epsilon_decay = 0  # 1/849
 memory_size = 100
 batch_size = 8
@@ -127,7 +127,7 @@ class Env:
         self.cpus = 0.5
         self.replica = 1
         self.cpu_utilization = 0.0
-        self.state_space = [1, 0.0, 0.5, 10]
+        self.state_space = [1, 0.0, 0.5, 40]
         self.n_state = len(self.state_space)
         self.action_space = ['-r', '-1', '0', '1', 'r']
         self.n_actions = len(self.action_space)
@@ -236,8 +236,8 @@ class Env:
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        if self.service_name == 'app_mn1':
-            time.sleep(5)  # wait app_mn1 service start
+        # if self.service_name == 'app_mn1':
+        #     time.sleep(5)  # wait app_mn1 service start
         time.sleep(30)  # wait service start
 
         if not done:
@@ -248,7 +248,7 @@ class Env:
         response_time_list = []
         time.sleep(20)
         for i in range(5):
-            # time.sleep(1)
+            time.sleep(1)
             response_time_list.append(self.get_response_time())
 
         if done:
@@ -287,7 +287,7 @@ class Env:
         next_state.append(self.replica)
         next_state.append(u/10/self.cpus)
         next_state.append(self.cpus)
-        next_state.append(request_num[timestamp])
+        next_state.append(Rt)
         # next_state.append(req)
 
         # cost function

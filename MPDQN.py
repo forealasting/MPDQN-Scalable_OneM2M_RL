@@ -17,7 +17,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/result7/"
+result_dir = "./mpdqn_result/result8/"
 
 ## initial
 request_num = []
@@ -117,7 +117,7 @@ with open(result_dir + 'setting.txt', 'a') as f:
         f.write(f'{key}: {value}\n')
 
 
-## 7/8 stage
+## 8 stage
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
@@ -136,7 +136,7 @@ print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
 
 class Env:
 
-    def __init__(self, service_name="app_mn1"):
+    def __init__(self, service_name):
 
         self.service_name = service_name
         self.cpus = 0.5
@@ -192,23 +192,24 @@ class Env:
         return response_time
 
     def get_cpu_utilization(self):
-        path = result_dir + self.service_name + '_cpu.txt'
-        try:
-            f = open(path, "r")
-            cpu = []
-            time = []
-            for line in f:
-                s = line.split(' ')
-                time.append(float(s[0]))
-                cpu.append(float(s[1]))
-
-            last_avg_cpu = statistics.mean(cpu[-10:])
-            f.close()
-
-            return last_avg_cpu
-        except:
-
-            print('cant open')
+        if self.service_name =='app_mn1':
+            worker_name = 'worker'
+        else:
+            worker_name = 'worker1'
+        cmd = "sudo docker-machine ssh " + worker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+        returned_text = subprocess.check_output(cmd, shell=True)
+        my_data = returned_text.decode('utf8')
+        my_data = my_data.split("}")
+        cpu_list = []
+        for i in range(len(my_data) - 1):
+            # print(my_data[i]+"}")
+            my_json = json.loads(my_data[i] + "}")
+            name = my_json['Name'].split(".")[0]
+            cpu = my_json['CPUPerc'].split("%")[0]
+            if float(cpu) > 0 and name == self.service_name:
+                cpu_list.append(float(cpu))
+        avg_replica_cpu_utilization = sum(cpu_list)/len(cpu_list)
+        return avg_replica_cpu_utilization
 
     def discretize_cpu_value(self, value):
         return int(round(value / 10))
@@ -228,8 +229,6 @@ class Env:
         returned_text = subprocess.check_output(cmd, shell=True)
         returned_text = subprocess.check_output(cmd1, shell=True)
 
-        if self.service_name == 'app_mn1':
-            time.sleep(5)  # wait app_mn1 service start
         time.sleep(30)  # wait service start
 
         if not done:
@@ -296,10 +295,10 @@ class Env:
 
 
 
-def store_cpu(start_time, woker_name):
+def store_cpu(start_time, worker_name):
     global timestamp, cpus, change, reset_complete
 
-    cmd = "sudo docker-machine ssh " + woker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+    cmd = "sudo docker-machine ssh " + worker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
     while True:
 
         if send_finish == 1:
@@ -373,8 +372,11 @@ def store_error_count(error):
 
 
 
-def post_url(url, RFID, content):
-
+def post_url(url, RFID):
+    if error_rate > random.random():
+        content = "false"
+    else:
+        content = "true"
     headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
     data = {
         "m2m:cin": {
@@ -408,11 +410,11 @@ def send_request(stage, request_num, start_time, total_episodes):
         send_finish = 0
         for i in request_num:
             # print("timestamp: ", timestamp)
-            event_mn1.clear()
+            event_mn1.clear()  # set flag to false
             event_mn2.clear()
             if ((timestamp - 1) % 30) == 0:
                 print("wait mn1 mn2 step ...")
-                event_mn1.wait()
+                event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
                 change = 0
             event_timestamp_Ccontrol.clear()
@@ -423,13 +425,8 @@ def send_request(stage, request_num, start_time, total_episodes):
                     url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                     # change stage
                     url1 = url + stage[(tmp_count * 10 + j) % 8]
-                    if error_rate > random.random():
-                        content = "false"
-                    else:
-                        content = "true"
-                    response = post_url(url1, RFID, content)
+                    response = post_url(url1, RFID)
                     RFID += 1
-
                 except:
                     print("error")
                     error += 1
@@ -525,7 +522,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 # Covert np.float32
                 next_state = np.array(next_state, dtype=np.float32)
                 next_act, next_act_param, next_all_action_parameters = agent.act(next_state)  # next_act: 2 # next_act_param: 0.85845 # next_all_action_parameters: -0.79984,-0.97112,0.85845
-                print("service name:", env.service_name, "action: ", act, act_param, all_action_parameters, " step: ", step,
+                print("service name:", env.service_name, "action: ", act + 1, act_param, all_action_parameters, " step: ", step,
                       " next_state: ",
                       next_state, " reward: ", reward, " done: ", done, "epsilon", agent.epsilon)
                 store_trajectory(env.service_name, step, state, act + 1, all_action_parameters, reward, reward_perf,
