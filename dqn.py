@@ -216,7 +216,7 @@ class Env:
         if action == '-1':
             if self.cpus >= 0.5:
                 self.cpus -= 0.1
-                self.cpus = round(self.cpus, 1)  # ex error:  0.7999999999999999
+                self.cpus = round(self.cpus, 1)  # Prevent python Output float error : 0.8 -  0.1   Output:  0.7999999999999999
                 change = 1
                 cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
                 returned_text = subprocess.check_output(cmd, shell=True)
@@ -673,8 +673,12 @@ def store_error_count(error):
 
 
 
-def post_url(url, RFID, content):
+def post_url(url, RFID):
 
+    if error_rate > random.random():
+        content = "false"
+    else:
+        content = "true"
     headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
     data = {
         "m2m:cin": {
@@ -727,20 +731,25 @@ def send_request(stage, request_num, start_time, total_episodes):
                         content = "false"
                     else:
                         content = "true"
-                    response = post_url(url1, RFID, content)
+                    s_time = time.time()
+                    response = post_url(url1, RFID)
+                    t_time = time.time()
+                    rt = t_time - s_time
                     RFID += 1
 
                 except:
-                    print("eror")
+                    rt = 0.05
+                    print("error")
                     error += 1
 
-                if use_tm == 1:
-                    time.sleep(exp[tmp_count])
-                    tmp_count += 1
+                # if use_tm == 1:
+                #     time.sleep(exp[tmp_count])
+                #     tmp_count += 1
+                if rt < (1 / i):
+                    time.sleep(1 / i - rt)  # send requests every 1/is
 
-                else:
-                    time.sleep(1 / i)  # send requests every 1s
-
+                time.sleep(1 / i)  # send requests every 1s
+                tmp_count += 1
             timestamp += 1
             event_timestamp_Ccontrol.set()
 

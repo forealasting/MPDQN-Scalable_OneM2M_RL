@@ -335,8 +335,8 @@ class PDQNAgent:
 
         self.actor_optimiser.zero_grad()
         loss_Q.backward()
-        if self.clip_grad > 0:
-            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.clip_grad)
+        # if self.clip_grad > 0:
+        #     torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.clip_grad)
         self.actor_optimiser.step()
 
         # ---------------------- optimize actor ----------------------

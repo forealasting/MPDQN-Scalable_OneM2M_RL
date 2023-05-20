@@ -4,18 +4,29 @@ import statistics
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
 # r = '100'
-simulation_time = 300  # 3602 s
+simulation_time = 100  # s
 
 # moving for plot
-moving_avg = 1
+moving_avg = 0
 move = 10
 
 # limit_cpus = 1
 # tmp_str = "result2/result_cpu" # result_1016/tm1
-tmp_dir = "result_0221"
-path1 = tmp_dir + "/app_mn1_cpu.txt"
-path2 = tmp_dir + "/app_mn2_cpu.txt"
+tmp_dir = "0520/request_40/result1/"
+path1 = tmp_dir + "app_mn1_cpu.txt"
+path2 = tmp_dir + "app_mn2_cpu.txt"
+setting = tmp_dir + "setting.txt"
+f = open(setting, "r")
+cpus1 = 0
+replica1 = 0
+for line in f:
+    s = line.split(': ')
+    if s[0] == 'cpus':
+        cpus1 = float(s[1])
+    if s[0] == 'replica':
+        replica1 = float(s[1])
 
+Resource_use = cpus1 * replica1
 service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
 
 # path_list = [path1]
@@ -27,25 +38,14 @@ def cal_cpu(f):
 
     for line in f:
         s = line.split(' ')
-        if float(s[2]) > 0 and float(s[2]) < 100:
-            # print(float(s[0]), float(s[2]))
-
+        # if float(s[2]) > 0 :
+        #     # print(float(s[0]), float(s[2]))
+        if float(s[0]) < simulation_time:
             time.append(float(s[0]))
-            cpu.append(float(s[2]))
-
-
+            u = float(s[1])/cpus1
+            if u > 100 : u = 100
+            cpu.append(u)
     f.close()
-
-    # calculate  cpu (ms) ---------------
-    # time_ = [time for time in time if time >= 300]
-
-    # tmp_use ---------------
-    # cpu_ = [cpu[i] for i in range(len(cpu)) if time[i] >= 300]
-    # # print(cpu_)
-    # avg = sum(cpu_) / len(cpu_)
-    # max_d = max(cpu_)
-    # min_d = min(cpu_)
-    # st_dev = statistics.pstdev(cpu_)
 
     avg = sum(cpu) / len(cpu)
     max_d = max(cpu)
@@ -53,29 +53,19 @@ def cal_cpu(f):
     st_dev = statistics.pstdev(cpu)
     print(avg, max_d, min_d)
     print("st_dev: ", st_dev)
-    # tmp_use ---------------
 
-
-    # avg = sum(cpu) / len(cpu)
-    # max_d = max(cpu)
-    # min_d = min(cpu)
-    # print(avg, max_d, min_d)
-
-    # calculate  cpu (ms) ---------------
-    # print(len(time), len(cpu))
-    x = []
     y = cpu
-
-    count = 0
-    for i in range(simulation_time):
-        r = time.count(i)
-        if r > 0:
-            d = 1 / r
-            for j in range(r):
-                x.append(count)
-                count += d
-        else:
-            count += 1
+    #
+    # count = 0
+    # for i in range(simulation_time):
+    #     r = time.count(i)
+    #     if r > 0:
+    #         d = 1 / r
+    #         for j in range(r):
+    #             x.append(count)
+    #             count += d
+    #     else:
+    #         count += 1
 
     # print(len(time), len(cpu))
 
@@ -91,9 +81,23 @@ def cal_cpu(f):
             cpu_m.append(avg)
         y = cpu_m
 
+    data_dict = {}
+    for index, value in zip(time, y):
+        if index in data_dict:
+            data_dict[index].append(value)
+        else:
+            data_dict[index] = [value]
 
-    return time, y
+    x_ = []
+    y_ = []
+    for index, values in data_dict.items():
+        x_.append(index)
+        y_.append(sum(values) / len(values))
 
+    # print(x_)
+    # print(y_)
+
+    return x_, y_
 
 # Plot --------------------------------------
 
@@ -107,7 +111,7 @@ for p in path_list:
 
     f = open(p, "r")
     x, y = cal_cpu(f)
-
+    # x_ = [i+1 for i in x]
     # print(y)
 
     ### plot delay
@@ -119,7 +123,6 @@ for p in path_list:
     # fig_add(x, y4, 'Machine2', 'blue')
 
 
-
 # plt.title("Test")
 
 plt.xlabel("timestamp")
@@ -127,7 +130,7 @@ plt.ylabel("Cpu utilization(%) ")
 plt.grid(True)
 plt.legend()
 plt.xlim(0, simulation_time)
-plt.ylim(0, 110)
-plt.savefig("Cpu_utilization.png")
+plt.ylim(0, 105)
+plt.savefig(tmp_dir + "Cpu_utilization.png", dpi=300)
 plt.tight_layout()
 plt.show()

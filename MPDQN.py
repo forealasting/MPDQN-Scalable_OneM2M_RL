@@ -237,7 +237,7 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(25)
+        time.sleep(50)
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -424,19 +424,27 @@ def send_request(stage, request_num, start_time, total_episodes):
                 try:
                     url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                     # change stage
+
                     url1 = url + stage[(tmp_count * 10 + j) % 8]
+                    s_time = time.time()
                     response = post_url(url1, RFID)
+                    t_time = time.time()
+                    rt = t_time - s_time
                     RFID += 1
+
                 except:
+                    rt = 0.05
                     print("error")
                     error += 1
 
-                if use_tm == 1:
-                    time.sleep(exp[tmp_count])
-                    tmp_count += 1
+                # if use_tm == 1:
+                #     time.sleep(exp[tmp_count])
+                #     tmp_count += 1
+                if rt < (1 / i):
+                    time.sleep(1 / i - rt)  # send requests every 1/is
 
-                else:
-                    time.sleep(1 / i)  # send requests every 1s
+                time.sleep(1 / i)  # send requests every 1s
+                tmp_count += 1
             timestamp += 1
             event_timestamp_Ccontrol.set()
 
