@@ -1,5 +1,4 @@
 import requests
-import concurrent.futures
 import time
 import threading
 import subprocess
@@ -7,9 +6,10 @@ import json
 import numpy as np
 import random
 import os
-
+import math
+import statistics
 # define result path
-result_dir = "./static_result/result62/"
+result_dir = "./threshold_result/result1/"
 
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
@@ -19,18 +19,28 @@ error_rate = 0.2   # 0.2/0.5
 
 ## initial
 request_num = []
-simulation_time = 100  # 300 s  # 3600s
-cpus1 = 0.5
-cpus2 = 0.5
+simulation_time = 3600  # 300 s  # 3600s
+cpus1 = 1
+cpus2 = 1
 replica1 = 1
 replica2 = 1
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
 send_finish = 0
+reset_complete = 0
 timestamp = 0
 RFID = 0
+
+Tmax_mn1 = 20
+Tmax_mn2 = 20
+
+# threshold
+scale_out_threshold = 80  # if cpu utilization >= 80%, scale out
+scale_in_threshold = 20  # if cpu utilization <= 20%, scale in
+
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
+event_timestamp_Ccontrol = threading.Event()
 
 ip = "192.168.99.124"  # app_mn1
 ip1 = "192.168.99.125"  # app_mn2
@@ -75,9 +85,198 @@ else:
 
 print('request_num:: ', len(request_num))
 
+class Env:
 
-def post_url(url, RFID, content):
+    def __init__(self, service_name):
 
+        self.service_name = service_name
+        self.cpus = 1
+        self.replica = 1
+        self.cpu_utilization = 0.0
+        self.action_space = ['-1', 0, '1']
+        self.state_space = [1, 0.0, 0.5, 40]  # [1, 0.0, 0.5, 10]
+        self.n_state = len(self.state_space)
+        self.n_actions = len(self.action_space)
+
+        # Need modify ip if container name change
+        self.url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
+                                    "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container",
+                                    "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
+
+    def reset(self):
+        self.cpus = 0.5
+        self.replica = 1
+
+    def get_response_time(self):
+
+        path1 = result_dir + self.service_name + "_response.txt"
+        f1 = open(path1, 'a')
+        RFID = random.randint(0, 1000000)
+        headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
+        data = {
+            "m2m:cin": {
+                "con": "true",
+                "cnf": "application/json",
+                "lbl": "req",
+                "rn": str(RFID + 1000),
+            }
+        }
+        # URL
+        service_name_list = ["app_mn1", "app_mn2"]
+        url = self.url_list[service_name_list.index(self.service_name)]
+        try:
+            start = time.time()
+            response = requests.post(url, headers=headers, json=data, timeout=0.05)
+            response = response.status_code
+            end = time.time()
+            response_time = end - start
+        except requests.exceptions.Timeout:
+            response = "timeout"
+            response_time = 0.05
+
+        data1 = str(timestamp) + ' ' + str(response) + ' ' + str(response_time) + ' ' + str(self.cpus) + ' ' + str(self.replica) + '\n'
+        f1.write(data1)
+        f1.close()
+        if str(response) != '201':
+            response_time = 0.05
+
+        return response_time
+
+    def get_cpu_utilization(self):
+        if self.service_name =='app_mn1':
+            worker_name = 'worker'
+        else:
+            worker_name = 'worker1'
+        cmd = "sudo docker-machine ssh " + worker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+        returned_text = subprocess.check_output(cmd, shell=True)
+        my_data = returned_text.decode('utf8')
+        my_data = my_data.split("}")
+        cpu_list = []
+        for i in range(len(my_data) - 1):
+            # print(my_data[i]+"}")
+            my_json = json.loads(my_data[i] + "}")
+            name = my_json['Name'].split(".")[0]
+            cpu = my_json['CPUPerc'].split("%")[0]
+            if float(cpu) > 0 and name == self.service_name:
+                cpu_list.append(float(cpu))
+        avg_replica_cpu_utilization = sum(cpu_list)/len(cpu_list)
+        return avg_replica_cpu_utilization
+
+    def discretize_cpu_value(self, value):
+        return int(round(value / 10))
+
+    def step(self, action, event, done):
+        global timestamp, send_finish, change, simulation_time
+
+        if action == '-r':
+            if self.replica > 1:
+                self.replica -= 1
+                change = 1
+                cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(
+                    self.replica)
+                returned_text = subprocess.check_output(cmd, shell=True)
+
+        if action == 'r':
+            if self.replica < 3:
+                self.replica += 1
+                change = 1
+                cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(
+                    self.replica)
+                returned_text = subprocess.check_output(cmd, shell=True)
+
+        if  action == '0':
+            cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(
+                self.replica)
+            returned_text = subprocess.check_output(cmd, shell=True)
+
+        time.sleep(30)  # wait service start
+
+        if not done:
+            # print(self.service_name, "_done: ", done)
+            # print(self.service_name, "_step complete")
+            event.set()
+
+        response_time_list = []
+        time.sleep(50)
+        for i in range(5):
+            time.sleep(1)
+            response_time_list.append(self.get_response_time())
+
+        if done:
+            # print(self.service_name, "_done: ", done)
+            time.sleep(5)
+            event.set()  # if done and after get_response_time
+        # mean_response_time = sum(response_time_list)/len(response_time_list)
+        # print(response_time_list)
+        mean_response_time = statistics.mean(response_time_list)
+        mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
+        t_max = 0
+
+        if self.service_name == "app_mn1":
+            t_max = Tmax_mn1
+        elif self.service_name == "app_mn2":
+            t_max = Tmax_mn2
+
+        Rt = mean_response_time
+        if Rt > t_max:
+            c_perf = 1
+        else:
+            tmp_d = 10*(Rt - t_max)/t_max
+            c_perf = math.exp(tmp_d)
+
+
+        c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
+        next_state = []
+        # # k, u, c # r
+        self.cpu_utilization = self.get_cpu_utilization()
+        path = result_dir + self.service_name + "_agent_get_cpu.txt"
+        f1 = open(path, 'a')
+        data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
+        f1.write(data)
+        f1.close()
+        # u = self.discretize_cpu_value(self.cpu_utilization)
+        next_state.append(self.replica)
+        next_state.append(self.cpu_utilization/100/self.cpus)
+        next_state.append(self.cpus)
+        next_state.append(Rt)
+        # next_state.append(request_num[timestamp])
+
+        # cost function
+        w_pref = 0.8
+        w_res = 0.2
+        # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
+        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # normalize to [0, 1]
+        reward_perf = w_pref * c_perf
+        reward_res = w_res * c_res
+        reward = -(reward_perf + reward_res)
+        return next_state, reward, reward_perf, reward_res
+
+def get_cpu_utilization(service_name):
+    path = result_dir + service_name + '_cpu.txt'
+    try:
+        f = open(path, "r")
+        cpu = []
+        time = []
+        for line in f:
+            s = line.split(' ')
+            time.append(float(s[0]))
+            cpu.append(float(s[1]))
+
+        last_avg_cpu = statistics.mean(cpu[-5:])
+        f.close()
+
+        return last_avg_cpu
+    except:
+
+        print('cant open')
+
+
+def post_url(url, RFID):
+
+    if error_rate > random.random():
+        content = "false"
+    else:
+        content = "true"
     headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
     data = {
         "m2m:cin": {
@@ -97,13 +296,13 @@ def post_url(url, RFID, content):
 
 
 def store_cpu(start_time, woker_name):
-    global timestamp, change
+    global timestamp, change, reset_complete
 
     cmd = "sudo docker-machine ssh " + woker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
     while True:
         if send_finish == 1:
             break
-        if change == 0:
+        if change == 0 and reset_complete == 1:
             returned_text = subprocess.check_output(cmd, shell=True)
             my_data = returned_text.decode('utf8')
             # print(my_data.find("CPUPerc"))
@@ -123,103 +322,63 @@ def store_cpu(start_time, woker_name):
                 f.close()
 
 
-def store_rt(timestamp, response, rt):
-    path = result_dir + "app_mn1_response.txt"
+def store_trajectory(service_name, step, s, a, r, r_perf, r_res, s_, done):
+    path = result_dir + service_name + "_trajectory.txt"
+    tmp_s = list(s)
+    tmp_s_ = list(s_)
     f = open(path, 'a')
-    for i in range(len(timestamp)):
-        data = str(timestamp[i]) + ' ' + str(response[i]) + ' ' + str(rt[i]) + '\n'
-        f.write(data)
-    f.close()
+    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
+    f.write(data)
 
-# sned request to app_mn2 app_mnae1 app_mnae2
-def store_rt2():
-    global timestamp, send_finish, change
-
-    path1 = result_dir + "/app_mn2_response.txt"
-    path2 = result_dir + "/app_mnae1_response.txt"
-    path3 = result_dir + "/app_mnae2_response.txt"
-
-    while True:
-        if change == 0:
-            f1 = open(path1, 'a')
-            f2 = open(path2, 'a')
-            f3 = open(path3, 'a')
-            RFID = random.randint(0, 100000000)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
-                data = {
-                    "m2m:cin": {
-                        "con": "true",
-                        "cnf": "application/json",
-                        "lbl": "req",
-                        "rn": str(RFID),
-                    }
-                }
-
-                # URL 1
-                url = "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container"
-                try:
-                    s_time = time.time()
-                    future = executor.submit(requests.post, url, headers=headers, json=data, timeout=0.05)
-                    response = future.result()
-                    response_time1 = time.time() - s_time
-                    response1 = str(response.status_code)
-                except requests.exceptions.Timeout:
-                    response1 = 'timeout'
-                    response_time1 = 0.05
-
-                # # URL 2
-                try:
-                    s_time = time.time()
-                    future = executor.submit(requests.post, "http://" + ip + ":1111/test", headers=headers, json=data, timeout=0.05)
-                    response = future.result()
-                    response_time2 = time.time() - s_time
-                    response2 = str(response.status_code)
-                except requests.exceptions.Timeout:
-                    response2 = 'timeout'
-                    response_time1 = 0.05
-
-                # # URL 3
-                try:
-                    s_time = time.time()
-                    future = executor.submit(requests.post, "http://" + ip1 + ":2222/test", headers=headers, json=data, timeout=0.05)
-                    response = future.result()
-                    response_time3 = time.time() - s_time
-                    response3 = str(response.status_code)
-                except requests.exceptions.Timeout:
-                    response3 = 'timeout'
-                    response_time3 = 0.05
-
-                data1 = str(timestamp) + ' ' + str(response1) + ' ' + str(response_time1) + '\n'
-                data2 = str(timestamp) + ' ' + str(response2) + ' ' + str(response_time2) + '\n'
-                data3 = str(timestamp) + ' ' + str(response3) + ' ' + str(response_time3) + '\n'
-                f1.write(data1)
-                f2.write(data2)
-                f3.write(data3)
-            time.sleep(1)
-
-            if send_finish == 1:
-                f1.close()
-                f2.close()
-                f3.close()
-                break
-
+def reset():
+    cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
+    cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
+    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
+    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
+    subprocess.check_output(cmd1, shell=True)
+    subprocess.check_output(cmd2, shell=True)
+    subprocess.check_output(cmd3, shell=True)
+    subprocess.check_output(cmd4, shell=True)
 
 def send_request(stage, request_num, start_time):
     global change, send_finish
     global timestamp, use_tm, RFID
-
+    timestamp = 0
     error = 0
-    all_rt = []
-    all_timestamp = []
-    all_response = []
+
+    print("reset envronment")
+    reset_complete = 0
+    reset()  # reset Environment
+    time.sleep(70)
+    print("reset envronment complete")
+    reset_complete = 1
+    send_finish = 0
+
+    for j in range(data_rate):
+        tmp_count = 0
+        try:
+            # change stage
+            url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+            url1 = url + stage[(tmp_count * 10 + j) % 8]
+            s_time = time.time()
+            response = post_url(url1, RFID)
+            t_time = time.time()
+            rt = t_time - s_time
+            RFID += 1
+
+        except:
+            rt = 0.05
+            print("error")
+            error += 1
+        time.sleep(1 / data_rate)
+
     for i in request_num:
-        print("timestamp: ", timestamp)
-        exp = np.random.exponential(scale=1 / i, size=i)
+        # print("timestamp: ", timestamp)
+        # exp = np.random.exponential(scale=1 / i, size=i)
         tmp_count = 0
         event_mn1.clear()  # set flag to false
         event_mn2.clear()  # set flag to false
-        if (timestamp % 30 == 0 and timestamp != 0):
+        if (timestamp % 60 == 0 and timestamp != 0):
             print("wait mn1 mn2 step ...")
             event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
             event_mn2.wait()
@@ -229,121 +388,107 @@ def send_request(stage, request_num, start_time):
                 # change stage
                 url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                 url1 = url + stage[(tmp_count * 10 + j) % 8]
-                if error_rate > random.random():
-                    content = "false"
-                else:
-                    content = "true"
                 s_time = time.time()
-                response = post_url(url1, RFID, content)
-                # print(response)
+                response = post_url(url1, RFID)
                 t_time = time.time()
                 rt = t_time - s_time
-                all_timestamp.append(timestamp)
-                all_response.append(response)
-                all_rt.append(rt)
                 RFID += 1
 
             except:
+                rt = 0.1
                 print("error")
                 error += 1
 
-            if use_tm == 1:
-                time.sleep(exp[tmp_count])
-                tmp_count += 1
-
-            else:
-                time.sleep(1 / i)  # send requests every 1s
+            if rt < (1 / i) and (i > 50):
+                time.sleep((1 / i) - rt)
+            elif i <= 50:
+                time.sleep(1 / i)
+            tmp_count += 1
 
         timestamp += 1
-    store_rt(all_timestamp, all_response, all_rt)
+
     final_time = time.time()
     alltime = final_time - start_time
     print('time:: ', alltime)
     send_finish = 1
 
 
-def manual_action_mn1():
-    global T_max, type, change, send_finish, replica1, cpus1
+def agent_threshold_mn1(event):
+    global T_max, change, send_finish, replica1, cpus1
+    global timestamp
+    done = False
+    service_name = "app_mn1"
+    env = Env(service_name)
+    step = 0
+    init_state = [1, 0.0, 0.5, 35]
+    state = init_state
+    # action: +1 scale out -1 scale in
+    while True:
+        if timestamp == 0:
+            done = False
+        event_timestamp_Ccontrol.wait()
+        if (((timestamp - 1) % 60) == 0) and (not done):
+            if timestamp == (simulation_time - 1):
+                done = True
+            else:
+                done = False
+            if done:
+                break
+
+            cpu_utilization = get_cpu_utilization(service_name)
+            if cpu_utilization >= 80.0:
+                action = "+1"
+            elif cpu_utilization <= 20.0:
+                action = "-1"
+            else:
+                action = "0"
+
+            next_state, reward, reward_perf, reward_res = env.step(action, event, done)
+            store_trajectory(env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
+
+            state = next_state
+            step += 1
+            event_timestamp_Ccontrol.clear()
+
+def agent_threshold_mn2(event):
+    global T_max, change, send_finish, replica2, cpus2
     global timestamp
 
-    change_check = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-    change_type = 3  # 1 : change cpus 2: change replica
+    done = False
+    service_name = "app_mn2"
+    env = Env(service_name)
+    step = 0
+    init_state = [1, 0.0, 0.5, 35]
+    state = init_state
+    # action: +1 scale out -1 scale in
     while True:
-        if send_finish == 1:
-            break
-        print(timestamp)
-        if ((timestamp % 30) == 0) and (change_type == 3) and (timestamp != 0):
-            idx = int(timestamp / 30)
-            if change_check[idx] == 0:
-                change = 1
-                if cpus1 == 1:
-                    replica1 += 1
-                    cmd = "sudo docker-machine ssh default docker service scale app_mn1=" + str(replica1)
-                    returned_text = subprocess.check_output(cmd, shell=True)
-                    time.sleep(15)
-                    cpus1 = 0.5
-                cpus1 += 0.1
-                cpus1 = round(cpus1, 1)
-                cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(cpus1) + " app_mn1"
-                returned_text = subprocess.check_output(cmd, shell=True)
+        if timestamp == 0:
+            done = False
+        event_timestamp_Ccontrol.wait()
+        if (((timestamp - 1) % 60) == 0) and (not done):
+            if timestamp == (simulation_time - 1):
+                done = True
+            else:
+                done = False
+            if done:
+                break
 
-                change_check[idx] = 1
-                print('change cpus1 to ', cpus1)
-                time.sleep(30)
-                event_mn1.set()
-                change = 0
-        # if ((timestamp % 50) == 0) and (change_type == 1) and (timestamp != 0):
-        #     idx = int(timestamp / 50)
-        #     if change_check[idx] == 0:
-        #         change = 1
-        #         cpus += 0.1
-        #         cpus = round(cpus, 1)
-        #         cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(cpus) + " app_mn1"
-        #         returned_text = subprocess.check_output(cmd, shell=True)
-        #         change_check[idx] = 1
-        #         print('change cpus to ', cpus)
-        #         time.sleep(30)
-        #         change = 0
-        # if (timestamp == 150) and (change_type == 2) and (timestamp != 0):
-        #     idx = int(timestamp/50)
-        #     if change_check[idx] == 0:
-        #         change = 1
-        #         replicas += 1
-        #         change_check[idx] = 1
-        #         cmd = "sudo docker-machine ssh default docker service scale app_mn1=" + str(replicas)
-        #         returned_text = subprocess.check_output(cmd, shell=True)
-        #         # print('change replicas to ', replicas)
+            cpu_utilization = get_cpu_utilization(service_name)
+            if cpu_utilization >= 80.0:
+                action = "+1"
+            elif cpu_utilization <= 20.0:
+                action = "-1"
+            else:
+                action = "0"
 
-def manual_action_mn2():
-    global T_max, type, change, send_finish, replica2, cpus2
-    global timestamp
+            next_state, reward, reward_perf, reward_res = env.step(action, event, done)
+            print("service name:", env.service_name, "action: ", action, " step: ", step, " next_state: ",
+                  next_state, " reward: ", reward, " done: ", done)
+            store_trajectory(env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
 
-    change_check = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-    change_type = 3  # 1 : change cpus 2: change replica
-    while True:
-        if send_finish == 1:
-            break
-        print(timestamp)
-        if ((timestamp % 30) == 0) and (change_type == 3) and (timestamp != 0):
-            idx = int(timestamp / 30)
-            if change_check[idx] == 0:
-                change = 1
-                if cpus2 == 1:
-                    replica2 += 1
-                    cmd = "sudo docker-machine ssh default docker service scale app_mn2=" + str(replica2)
-                    returned_text = subprocess.check_output(cmd, shell=True)
-                    time.sleep(15)
-                    cpus2 = 0.5
-                cpus2 += 0.1
-                cpus2 = round(cpus2, 1)
-                cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(cpus2) + " app_mn2"
-                returned_text = subprocess.check_output(cmd, shell=True)
-
-                change_check[idx] = 1
-                print('change cpus2 to ', cpus2)
-                time.sleep(30)
-                event_mn2.set()
-                change = 0
+            state = next_state
+            step += 1
+            event_timestamp_Ccontrol.clear()
 
 
 start_time = time.time()
@@ -351,21 +496,17 @@ start_time = time.time()
 t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, ))
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
-t4 = threading.Thread(target=store_rt2)
-t5 = threading.Thread(target=manual_action_mn1)
-t6 = threading.Thread(target=manual_action_mn2)
+t4 = threading.Thread(target=agent_threshold_mn1, args=(event_mn1,))
+t5 = threading.Thread(target=agent_threshold_mn2, args=(event_mn2,))
 
 t1.start()
 t2.start()
 t3.start()
 t4.start()
-# t5.start()
-# t6.start()
-
+t5.start()
 
 t1.join()
 t2.join()
 t3.join()
 t4.join()
-# t5.join()
-# t6.join()
+t5.join()

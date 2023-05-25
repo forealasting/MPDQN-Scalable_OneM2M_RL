@@ -9,18 +9,18 @@ import random
 import os
 
 # define result path
-result_dir = "./static_result/0520/request_50/result10/"
+result_dir = "./static_result/0521/request_70/result14/"
 
 # request rate r
-data_rate = 50  # use static request rate
+data_rate = 70  # use static request rate
 use_tm = 0  # use dynamic traffic
 error_rate = 0.2   # 0.2
 
 ## initial
 request_num = []
-simulation_time = 300  # 300 s  # 3600s
-cpus1 = 0.5
-replica1 = 1
+simulation_time = 100  # 300 s  # 3600s
+cpus1 = 0.9
+replica1 = 2
 
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -89,7 +89,7 @@ def post_url(url, RFID):
 
     try:
         # response = requests.post(url, headers=headers, json=data, timeout=0.05)
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=0.05)
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = 'timeout'
@@ -162,7 +162,7 @@ def store_rt2():
 
             try:
                 s_time = time.time()
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(url, headers=headers, json=data, timeout=0.05)
                 response1 = str(response.status_code)
                 response_time1 = time.time() - s_time
 
@@ -230,7 +230,7 @@ def send_request(sensors, request_num):
     all_response = []
     tmp_count = 0
     for i in request_num:  #request_num = [data_rate0, data_rate1 ...]
-        print("timestamp: ", timestamp)
+        # print("timestamp: ", timestamp)
         #exp = np.random.exponential(scale=1 / i, size=i)
 
         for j in range(i):
@@ -244,9 +244,9 @@ def send_request(sensors, request_num):
                 t_time = time.time()
                 rt = t_time - s_time
 
-                all_timestamp.append(timestamp)
-                all_response.append(response)
-                all_rt.append(rt)
+                # all_timestamp.append(timestamp)
+                # all_response.append(response)
+                # all_rt.append(rt)
 
                 RFID += 1  # For different RFID data
 
@@ -257,31 +257,34 @@ def send_request(sensors, request_num):
             # if use_tm == 1: no use now
             #     time.sleep(exp[tmp_count])
 
-            if rt < (1 / i):
-                time.sleep( (1 / i) - rt)
+            if rt < (1 / i) and (i > 50) :
+                time.sleep((1 / i) - rt)
+            elif i <= 50 :
+                time.sleep(1 / i)
             tmp_count += 1
 
         timestamp += 1
+    send_finish = 1
     store_rt(all_timestamp, all_response, all_rt)
     print("error: ", error)
-    send_finish = 1
+
 
 
 t1 = threading.Thread(target=send_request, args=(sensors, request_num, ))
 t2 = threading.Thread(target=store_cpu, args=('worker',))
 t3 = threading.Thread(target=store_cpu, args=('worker1',))
 t4 = threading.Thread(target=store_rt2)
-# t5 = threading.Thread(target=store_rt1)
+t5 = threading.Thread(target=store_rt1)
 
 t1.start()
 t2.start()
 t3.start()
 t4.start()
-# t5.start()
+t5.start()
 
 t1.join()
 t2.join()
 t3.join()
 t4.join()
-# t5.join()
+t5.join()
 

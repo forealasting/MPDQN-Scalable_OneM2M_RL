@@ -16,7 +16,7 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 1  # if use_tm
+use_tm = 0  # if use_tm
 result_dir = "./mpdqn_result/result8/"
 
 ## initial
@@ -41,8 +41,8 @@ event_timestamp_Ccontrol = threading.Event()
 ip = "192.168.99.124"  # app_mn1
 ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
-Rmax_mn1 = 30
-Rmax_mn2 = 20
+Tmax_mn1 = 20
+Tmax_mn2 = 20
 
 
 ## Learning parameter
@@ -51,14 +51,14 @@ Rmax_mn2 = 20
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-Training_episodes = 8
-Test_episodes = 1
-if_test = True
+Training_episodes = 16  # 16
+Test_episodes = 0
+if_test = False
 total_episodes = Training_episodes + Test_episodes      # Total episodes
-multipass = False  # False : PDQN  / Ture: MPDQN
+multipass = True  # False : PDQN  / Ture: MPDQN
 
 # Exploration parameters
-epsilon_steps = 840
+epsilon_steps = 840  # episode per step
 epsilon_initial = 1
 epsilon_final = 0.01
 
@@ -68,7 +68,7 @@ tau_actor_param = 0.01
 learning_rate_actor = 0.001
 learning_rate_actor_param = 0.001
 gamma = 0.9                 # Discounting rate
-replay_memory_size = 1000  # Replay memory
+replay_memory_size = 960  # Replay memory
 batch_size = 16
 initial_memory_threshold = 16  # Number of transitions required to start learning
 use_ornstein_noise = False
@@ -94,8 +94,8 @@ settings = {
     'date': datetime.datetime.now(),
     'data_rate': data_rate,
     'use_tm': use_tm,
-    'Rmax_mn1': Rmax_mn1,
-    'Rmax_mn2': Rmax_mn2,
+    'Tmax_mn1': Tmax_mn1,
+    'Tmax_mn2': Tmax_mn2,
     'simulation_time': simulation_time,
     'tau_actor': tau_actor,
     'tau_actor_param': tau_actor_param,
@@ -127,11 +127,11 @@ if use_tm:
     for line in f:
         if len(request_num) < request_n:
 
-            request_num.append(int(float(line)*2))
+            request_num.append(int(float(line)))
 else:
     request_num = [data_rate for i in range(simulation_time)]
 
-print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
+print("request_num:: ", request_num, "simulation_time:: ", simulation_time)
 
 
 class Env:
@@ -220,14 +220,18 @@ class Env:
 
         action_replica = action[0]
         action_cpus = action[1][action_replica][0]
-        self.replica = action_replica + 1  # 0 1 2 (index)-> 1 2 3 (replica)
-        self.cpus = round(action_cpus, 2)
-        # print(self.replica, self.cpus)
-        change = 1
-        cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
-        cmd1 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
-        returned_text = subprocess.check_output(cmd, shell=True)
-        returned_text = subprocess.check_output(cmd1, shell=True)
+        if (action_replica + 1) == self.replica and action_cpus == self.cpus:
+            cmd = "docker service update --replicas 0 app_mn1;docker service update --replicas "+str(action_replica + 1) + " app_mn1"
+            returned_text = subprocess.check_output(cmd, shell=True)
+        else:
+            self.replica = action_replica + 1  # 0 1 2 (index)-> 1 2 3 (replica)
+            self.cpus = round(action_cpus, 2)
+            # print(self.replica, self.cpus)
+            change = 1
+            cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
+            cmd1 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
+            returned_text = subprocess.check_output(cmd, shell=True)
+            returned_text = subprocess.check_output(cmd1, shell=True)
 
         time.sleep(30)  # wait service start
 
@@ -237,7 +241,7 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(50)
+        time.sleep(55)  # wait for monitor ture value
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -252,19 +256,17 @@ class Env:
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
         t_max = 0
 
-        if mean_response_time >= 50:
-            Rt = 50
-        else:
-            Rt = mean_response_time
         if self.service_name == "app_mn1":
-            t_max = Rmax_mn1
+            t_max = Tmax_mn1
         elif self.service_name == "app_mn2":
-            t_max = Rmax_mn2
+            t_max = Tmax_mn2
 
-
-        tmp_d = math.exp(50 / t_max)
-        tmp_n = math.exp(Rt / t_max)
-        c_perf = tmp_n / tmp_d
+        Rt = mean_response_time
+        if Rt > t_max:
+            c_perf = 1
+        else:
+            tmp_d = 10 * (Rt - t_max) / t_max
+            c_perf = math.exp(tmp_d)
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
@@ -284,9 +286,9 @@ class Env:
         # next_state.append(request_num[timestamp])
 
         # cost function
-        w_pref = 0.5
-        w_res = 0.5
-        c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
+        w_pref = 0.8
+        w_res = 0.2
+        # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
         c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
@@ -412,7 +414,7 @@ def send_request(stage, request_num, start_time, total_episodes):
             # print("timestamp: ", timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp - 1) % 30) == 0:
+            if ((timestamp - 1) % 60) == 0:
                 print("wait mn1 mn2 step ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
@@ -440,10 +442,10 @@ def send_request(stage, request_num, start_time, total_episodes):
                 # if use_tm == 1:
                 #     time.sleep(exp[tmp_count])
                 #     tmp_count += 1
-                if rt < (1 / i):
-                    time.sleep(1 / i - rt)  # send requests every 1/is
-
-                time.sleep(1 / i)  # send requests every 1s
+                if rt < (1 / i) and (i > 50):
+                    time.sleep((1 / i) - rt)
+                elif i <= 50:
+                    time.sleep(1 / i)
                 tmp_count += 1
             timestamp += 1
             event_timestamp_Ccontrol.set()
@@ -497,7 +499,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     # print(agent)
 
     start_time = time.time()
-    init_state = [1, 0.0, 0.5, 40]  # [1, 0.0, 0.5, 50]
+    init_state = [1, 1.0, 0.5, 40]
     step = 0
     for episode in range(1, total_episodes+1):
         if (episode == total_episodes) and if_test:  # Test
@@ -518,12 +520,14 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
             if timestamp == 0:
                 done = False
             event_timestamp_Ccontrol.wait()
-            if (((timestamp - 1) % 30) == 0) and (not done):
+            if (((timestamp - 1) % 60) == 0) and (not done):
                 if timestamp == (simulation_time - 1):
                     done = True
                 else:
                     done = False
 
+                if done:
+                    break
                 next_state, reward, reward_perf, reward_res = env.step(action, event, done)
                 # print("service name:", env.service_name, "action: ", action[0] + 1, round(action[1][action[0]][0], 2))
 
@@ -547,8 +551,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
                 step += 1
                 event_timestamp_Ccontrol.clear()
-            if done:
-                break
+
 
     agent.save_models(result_dir)
     end_time = time.time()

@@ -15,7 +15,6 @@ import statistics
 from typing import Dict, List, Tuple
 import os
 import datetime
-import concurrent.futures
 import math
 print(datetime.datetime.now())
 
@@ -46,8 +45,8 @@ event_timestamp_Ccontrol = threading.Event()
 ip = "192.168.99.124"  # app_mn1
 ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
-Rmax_mn1 = 30
-Rmax_mn2 = 20
+Tmax_mn1 = 30
+Tmax_mn2 = 20
 
 
 ## Learning parameter
@@ -85,8 +84,8 @@ f = open(path, 'a')
 data = 'date: ' + str(datetime.datetime.now()) + '\n'
 data += 'data_rate: ' + str(data_rate) + '\n'
 data += 'use_tm: ' + str(use_tm) + '\n'
-data += 'Rmax_mn1 ' + str(Rmax_mn1) + '\n'
-data += 'Rmax_mn2 ' + str(Rmax_mn2) + '\n'
+data += 'Tmax_mn1 ' + str(Tmax_mn1) + '\n'
+data += 'Tmax_mn2 ' + str(Tmax_mn2) + '\n'
 data += 'simulation_time ' + str(simulation_time) + '\n\n'
 data += 'learning_rate ' + str(learning_rate) + '\n'
 data += 'gamma ' + str(gamma) + '\n'
@@ -189,7 +188,7 @@ class Env:
             for line in f:
                 s = line.split(' ')
                 time.append(float(s[0]))
-                cpu.append(float(s[2]))
+                cpu.append(float(s[1]))
 
             last_avg_cpu = statistics.mean(cpu[-5:])
             f.close()
@@ -265,9 +264,9 @@ class Env:
         else:
             Rt = mean_response_time
         if self.service_name == "app_mn1":
-            t_max = Rmax_mn1
+            t_max = Tmax_mn1
         elif self.service_name == "app_mn2":
-            t_max = Rmax_mn2
+            t_max = Tmax_mn2
 
 
         tmp_d = math.exp(50 / t_max)
@@ -467,7 +466,6 @@ class DQNAgent:
             state = init_state
             done = False
             losses = []
-            rewards = []
 
             # if self.env.service_name == "app_mn1":
             #     print("service name:", self.env.service_name, " episode:", episode)
@@ -495,6 +493,11 @@ class DQNAgent:
                         done = True
                     else:
                         done = False
+
+                    if done:
+                        # state = self.env.reset()
+                        print("done")
+                        break
                     next_state, reward, reward_perf, reward_res = self.step(action, event, done)
                     # if self.env.service_name == "app_mn1":
                     print("service name:", self.env.service_name, "action: ", action, " step: ", step, " next_state: ",
@@ -512,12 +515,6 @@ class DQNAgent:
 
                     step += 1
                     event_timestamp_Ccontrol.clear()
-
-                if done:
-                    # state = self.env.reset()
-                    print("done")
-                    rewards.append(reward)
-                    break
 
             # store_reward(self.env.service_name, avg_rewards)
 
