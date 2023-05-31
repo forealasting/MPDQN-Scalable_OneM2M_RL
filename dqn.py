@@ -29,7 +29,7 @@ request_num = []
 # learning step:          0,  ..., 1,     , 120
 #
 simulation_time = 3602  # 300 s  # 0 ~ 3601:  3600
-request_n = simulation_time
+request_n = simulation_time + 60
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -45,7 +45,7 @@ event_timestamp_Ccontrol = threading.Event()
 ip = "192.168.99.124"  # app_mn1
 ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
-Tmax_mn1 = 30
+Tmax_mn1 = 20
 Tmax_mn2 = 20
 
 
@@ -290,10 +290,10 @@ class Env:
         # next_state.append(req)
 
         # cost function
-        w_pref = 0.5
-        w_res = 0.5
-        c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
-        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)
+        w_pref = 0.8
+        w_res = 0.2
+        # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0) # min max normalize
+        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
@@ -487,7 +487,7 @@ class DQNAgent:
                 if timestamp == 0:
                     done = False
                 event_timestamp_Ccontrol.wait()
-                if (((timestamp - 1) % 30) == 0) and (not done):
+                if (((timestamp - 1) % 60) == 0) and (not done):
                     action = self.select_action(state)
                     if timestamp == (simulation_time - 1):
                         done = True
@@ -711,7 +711,7 @@ def send_request(stage, request_num, start_time, total_episodes):
             # print("timestamp: ", timestamp)
             event_mn1.clear()
             event_mn2.clear()
-            if ((timestamp - 1) % 30) == 0:
+            if ((timestamp - 1) % 60) == 0:
                 print("wait mn1 mn2 step ...")
                 event_mn1.wait()
                 event_mn2.wait()

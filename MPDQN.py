@@ -16,8 +16,8 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 0  # if use_tm
-result_dir = "./mpdqn_result/result8/"
+use_tm = 1  # if use_tm
+result_dir = "./mpdqn_result/result2/"
 
 ## initial
 request_num = []
@@ -25,7 +25,7 @@ request_num = []
 # learning step:          0,  ..., 1,     , 120
 
 simulation_time = 3602  # 300 s  # 0 ~ 3601:  3602
-request_n = simulation_time
+request_n = simulation_time + 60
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -51,10 +51,13 @@ Tmax_mn2 = 20
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-Training_episodes = 16  # 16
-Test_episodes = 0
+total_episodes = 16   # Training_episodes
+
+
 if_test = False
-total_episodes = Training_episodes + Test_episodes      # Total episodes
+if if_test:
+    total_episodes = 1  # Testing_episodes
+
 multipass = True  # False : PDQN  / Ture: MPDQN
 
 # Exploration parameters
@@ -72,12 +75,12 @@ replay_memory_size = 960  # Replay memory
 batch_size = 16
 initial_memory_threshold = 16  # Number of transitions required to start learning
 use_ornstein_noise = False
-clip_grad = 10
+
 layers = [64,]
 seed = 9
 
-
-action_input_layer = 0  # no use
+clip_grad = 10 # no use now
+action_input_layer = 0  # no use now
 
 # check result directory
 if os.path.exists(result_dir):
@@ -122,7 +125,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request13.txt')
+    f = open('request/request12.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -131,7 +134,7 @@ if use_tm:
 else:
     request_num = [data_rate for i in range(simulation_time)]
 
-print("request_num:: ", request_num, "simulation_time:: ", simulation_time)
+# print("request_num:: ", request_num, "simulation_time:: ", simulation_time)
 
 
 class Env:
@@ -221,8 +224,10 @@ class Env:
         action_replica = action[0]
         action_cpus = action[1][action_replica][0]
         if (action_replica + 1) == self.replica and action_cpus == self.cpus:
-            cmd = "docker service update --replicas 0 app_mn1;docker service update --replicas "+str(action_replica + 1) + " app_mn1"
+            cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
+            cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(action_replica + 1) + " " + self.service_name
             returned_text = subprocess.check_output(cmd, shell=True)
+            returned_text = subprocess.check_output(cmd1, shell=True)
         else:
             self.replica = action_replica + 1  # 0 1 2 (index)-> 1 2 3 (replica)
             self.cpus = round(action_cpus, 2)
@@ -241,7 +246,8 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(55)  # wait for monitor ture value
+        time.sleep(50)  # wait for monitor ture value
+        # while(timestamp % 55 == 0)
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -280,7 +286,6 @@ class Env:
         # u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
         next_state.append(self.cpu_utilization/100/self.cpus)
-        # next_state.append(u/10)
         next_state.append(self.cpus)
         next_state.append(Rt)
         # next_state.append(request_num[timestamp])
@@ -288,8 +293,8 @@ class Env:
         # cost function
         w_pref = 0.8
         w_res = 0.2
-        # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
-        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)
+        # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)  # min max normalize
+        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
@@ -502,7 +507,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     init_state = [1, 1.0, 0.5, 40]
     step = 0
     for episode in range(1, total_episodes+1):
-        if (episode == total_episodes) and if_test:  # Test
+        if if_test:  # Test
             agent.epsilon_final = 0.
             agent.epsilon = 0.
             agent.noise = None
@@ -526,8 +531,6 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 else:
                     done = False
 
-                if done:
-                    break
                 next_state, reward, reward_perf, reward_res = env.step(action, event, done)
                 # print("service name:", env.service_name, "action: ", action[0] + 1, round(action[1][action[0]][0], 2))
 
@@ -541,8 +544,9 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                                  reward_res,
                                  next_state, done)
                 next_action = pad_action(next_act, next_act_param)
-                agent.step(state, (act, all_action_parameters), reward, next_state,
-                           (next_act, next_all_action_parameters), done)
+                if not if_test:
+                    agent.step(state, (act, all_action_parameters), reward, next_state,
+                               (next_act, next_all_action_parameters), done)
                 act, act_param, all_action_parameters = next_act, next_act_param, next_all_action_parameters
 
                 action = next_action
@@ -551,9 +555,10 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
                 step += 1
                 event_timestamp_Ccontrol.clear()
-
-
-    agent.save_models(result_dir)
+                if done:
+                    break
+    if not if_test:
+        agent.save_models(result_dir)
     end_time = time.time()
     print(end_time-start_time)
 

@@ -11,20 +11,20 @@ warnings.filterwarnings('ignore', category=MatplotlibDeprecationWarning)
 # request rate r
 # r = '100'
 simulation_time = 3602  # 3602 s
-total_episodes = 8
-
+total_episodes = 15
+step_per_episodes = 61
 # evaluation
-if_evaluation = 1
+if_evaluation = 0
 
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline_result/mpdqn_result/result1"
-tmp_dir = "mpdqn_result/result6"
+tmp_dir = "mpdqn_result/result1"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
 service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
-Rmax_mn1 = 30
+Rmax_mn1 = 20
 Rmax_mn2 = 20
 path_evaluate = tmp_dir+"/evaluate/"
 if not os.path.exists(path_evaluate):
@@ -91,7 +91,7 @@ def fig_add_Cpus(x, y, service_name):
     # plt.ylabel("Cpus")
     plt.grid(True)
 
-    plt.xlim(0, total_episodes*120)
+    plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 1.1)
     plt.savefig(tmp_dir + service_name + "_Cpus.png")
     plt.tight_layout()
@@ -108,7 +108,7 @@ def fig_add_Replicas(x, y, service_name):
     # plt.ylabel("Cpus")
     plt.grid(True)
 
-    plt.xlim(0, total_episodes*120)
+    plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 4)
     plt.savefig(tmp_dir + service_name + "_Replicas.png")
     plt.tight_layout()
@@ -121,7 +121,7 @@ def fig_add_Cpu_utilization(x, y, service_name):
     plt.xlabel("step")
     plt.ylabel("Cpu_utilization")
     plt.grid(True)
-    plt.xlim(0, total_episodes*120)
+    plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 100)
     plt.savefig(tmp_dir + service_name + "_Cpu_utilization.png")
     plt.tight_layout()
@@ -160,7 +160,7 @@ def fig_add_reward(x, y, y_, service_name):
 
     plt.grid(True)
 
-    plt.xlim(0, total_episodes*120)
+    plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(-0.6, 0)
     plt.savefig(tmp_dir + service_name + "_cost.png")
     plt.tight_layout()
@@ -200,8 +200,8 @@ def parse_episods_data(episods_data, service_name):
             reward.append(parsed_line[4])  # cost = -reward
             tmp_step += 1
         # episode_reward.append(sum(reward)/len(reward))
-    reward[851:871] = [reward[i] - 0.06 for i in range(851, 871)]
-    reward[871:] = [reward[i] + -0.08 for i in range(871, len(reward))]
+    # reward[851:871] = [reward[i] - 0.06 for i in range(851, 871)]
+    # reward[871:] = [reward[i] + -0.08 for i in range(871, len(reward))]
     resource_use = [x * y for x, y in zip(replicas, cpus)]
     replicas_ = moving_average(replicas)
     cpu_utilization_ = moving_average(cpu_utilization)
@@ -216,7 +216,7 @@ def parse_episods_data(episods_data, service_name):
     fig_add_Cpu_utilization(step, cpu_utilization_, service_name)
     fig_add_Resource_use(step, resource_use, resource_use_, service_name, tmp_dir)
     fig_add_reward(step, reward, reward_, service_name)
-    fig_add_Resource_use(step, resource_use[(total_episodes-1)*121:], resource_use_[(total_episodes-1)*121:], service_name, path_evaluate)
+    fig_add_Resource_use(step, resource_use[(total_episodes-1)*step_per_episodes:], resource_use_[(total_episodes-1)*step_per_episodes:], service_name, path_evaluate)
 
 
 tmp_count = 0
