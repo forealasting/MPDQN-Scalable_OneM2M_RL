@@ -132,7 +132,7 @@ if use_tm:
 
             request_num.append(int(float(line)))
 else:
-    request_num = [data_rate for i in range(simulation_time)]
+    request_num = [data_rate for i in range(request_n)]
 
 # print("request_num:: ", request_num, "simulation_time:: ", simulation_time)
 

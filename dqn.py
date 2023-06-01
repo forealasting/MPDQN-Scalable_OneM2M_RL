@@ -112,7 +112,7 @@ if use_tm:
 
             request_num.append(int(float(line)))
 else:
-    request_num = [data_rate for i in range(simulation_time)]
+    request_num = [data_rate for i in range(request_n)]
 
 
 print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
@@ -459,7 +459,7 @@ class DQNAgent:
         update_cnt = 0
         epsilons = []
         reward = 0
-        init_state = [1, 0.0, 0.5, 10]
+        init_state = [1, 1.0, 0.5, 40]
         init_state = np.array(init_state, dtype=float)
         step = 0
         for episode in range(episodes):
@@ -494,10 +494,6 @@ class DQNAgent:
                     else:
                         done = False
 
-                    if done:
-                        # state = self.env.reset()
-                        print("done")
-                        break
                     next_state, reward, reward_perf, reward_res = self.step(action, event, done)
                     # if self.env.service_name == "app_mn1":
                     print("service name:", self.env.service_name, "action: ", action, " step: ", step, " next_state: ",
@@ -515,6 +511,10 @@ class DQNAgent:
 
                     step += 1
                     event_timestamp_Ccontrol.clear()
+                    if done:
+                        # state = self.env.reset()
+                        print("done")
+                        break
 
             # store_reward(self.env.service_name, avg_rewards)
 
@@ -724,10 +724,7 @@ def send_request(stage, request_num, start_time, total_episodes):
                     url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                     # change stage
                     url1 = url + stage[(tmp_count * 10 + j) % 8]
-                    if error_rate > random.random():
-                        content = "false"
-                    else:
-                        content = "true"
+
                     s_time = time.time()
                     response = post_url(url1, RFID)
                     t_time = time.time()
