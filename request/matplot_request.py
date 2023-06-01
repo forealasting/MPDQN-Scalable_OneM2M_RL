@@ -4,12 +4,12 @@ import matplotlib.pyplot as plt
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
 
-simulation_time = 3600  # 300 s
-use_tm = 1
-r = 300
+simulation_time = 3660  # 300 s
 
 
-path1 = "request8.txt"
+
+
+path1 = "request14.txt"
 
 path_list = [path1]
 
@@ -18,7 +18,7 @@ def cal_req(f):
     req = []
 
     for line in f:
-        req.append(int(line))
+        req.append(float(line))
 
     f.close()
 
@@ -35,17 +35,9 @@ for p in path_list:
 
     f = open(p, "r")
     x = [k for k in range(simulation_time)]
-    if use_tm:
-        y = cal_req(f)
-    else:
-        y = []
-        for i in range(simulation_time):
-            y.append(r)
-        # r_tmp = 10
-        # for i in range(1, 31):
-        #     for j in range(10):
-        #         y.append(r_tmp)
-        #     r_tmp += 10
+
+    y = cal_req(f)
+
 
     print(len(x), len(y))
     print(y)
@@ -60,7 +52,7 @@ plt.title("Workload")
 plt.xlabel("timestamp")
 plt.ylabel("Data rate(requests/s) ")
 plt.grid(True)
-plt.ylim(0, 500)
+plt.ylim(0, 100)
 # plt.legend()
 plt.savefig("Data_rate.png", dpi=300)
 plt.show()

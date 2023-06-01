@@ -20,8 +20,8 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 1 # if use_tm
-result_dir = "./dqn_result/result12/"
+use_tm = 0 # if use_tm
+result_dir = "./dqn_result/result11/"
 
 ## initial
 request_num = []
@@ -42,8 +42,8 @@ event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
 
 # Need modify ip if ip change
-ip = "192.168.99.124"  # app_mn1
-ip1 = "192.168.99.125"  # app_mn2
+ip = "192.168.99.113"  # app_mn1
+ip1 = "192.168.99.114"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
@@ -61,8 +61,8 @@ learning_rate = 0.01          # Learning rate
 gamma = 0.9                 # Discounting rate
 max_epsilon = 1
 min_epsilon = 0.01   # 0.01
-epsilon_decay = 0  # 1/849
-memory_size = 100
+epsilon_decay = 1/840  # 1/840
+memory_size = 960
 batch_size = 8
 target_update = 100
 
@@ -180,23 +180,24 @@ class Env:
         return response_time
 
     def get_cpu_utilization(self):
-        path = result_dir + self.service_name + '_cpu.txt'
-        try:
-            f = open(path, "r")
-            cpu = []
-            time = []
-            for line in f:
-                s = line.split(' ')
-                time.append(float(s[0]))
-                cpu.append(float(s[1]))
-
-            last_avg_cpu = statistics.mean(cpu[-5:])
-            f.close()
-
-            return last_avg_cpu
-        except:
-
-            print('cant open')
+        if self.service_name == 'app_mn1':
+            worker_name = 'worker'
+        else:
+            worker_name = 'worker1'
+        cmd = "sudo docker-machine ssh " + worker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+        returned_text = subprocess.check_output(cmd, shell=True)
+        my_data = returned_text.decode('utf8')
+        my_data = my_data.split("}")
+        cpu_list = []
+        for i in range(len(my_data) - 1):
+            # print(my_data[i]+"}")
+            my_json = json.loads(my_data[i] + "}")
+            name = my_json['Name'].split(".")[0]
+            cpu = my_json['CPUPerc'].split("%")[0]
+            if float(cpu) > 0 and name == self.service_name:
+                cpu_list.append(float(cpu))
+        avg_replica_cpu_utilization = sum(cpu_list) / len(cpu_list)
+        return avg_replica_cpu_utilization
 
     def discretize_cpu_value(self, value):
         return int(round(value / 10))
@@ -234,6 +235,12 @@ class Env:
                 change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
+        else:
+            change = 1
+            cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
+            cmd1 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
+            returned_text = subprocess.check_output(cmd, shell=True)
+            returned_text = subprocess.check_output(cmd1, shell=True)
 
         # if self.service_name == 'app_mn1':
         #     time.sleep(5)  # wait app_mn1 service start
@@ -245,33 +252,32 @@ class Env:
             event.set()
 
         response_time_list = []
-        time.sleep(20)
+        time.sleep(50)
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
 
         if done:
             # print(self.service_name, "_done: ", done)
-            time.sleep(10)
+            time.sleep(5)
             event.set()  # if done and after get_response_time
         # mean_response_time = sum(response_time_list)/len(response_time_list)
         # print(response_time_list)
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
         t_max = 0
-        if mean_response_time >= 50:
-            Rt = 50
-        else:
-            Rt = mean_response_time
+
         if self.service_name == "app_mn1":
             t_max = Tmax_mn1
         elif self.service_name == "app_mn2":
             t_max = Tmax_mn2
 
-
-        tmp_d = math.exp(50 / t_max)
-        tmp_n = math.exp(Rt / t_max)
-        c_perf = tmp_n / tmp_d
+        Rt = mean_response_time
+        if Rt > t_max:
+            c_perf = 1
+        else:
+            tmp_d = 10 * (Rt - t_max) / t_max
+            c_perf = math.exp(tmp_d)
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
@@ -282,9 +288,9 @@ class Env:
         data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
         f1.write(data)
         f1.close()
-        u = self.discretize_cpu_value(self.cpu_utilization)
+        # u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
-        next_state.append(u/10/self.cpus)
+        next_state.append(self.cpu_utilization/100/self.cpus)
         next_state.append(self.cpus)
         next_state.append(Rt)
         # next_state.append(req)
@@ -458,7 +464,6 @@ class DQNAgent:
         self.is_test = False
         update_cnt = 0
         epsilons = []
-        reward = 0
         init_state = [1, 1.0, 0.5, 40]
         init_state = np.array(init_state, dtype=float)
         step = 0
@@ -512,7 +517,7 @@ class DQNAgent:
                     step += 1
                     event_timestamp_Ccontrol.clear()
                     if done:
-                        # state = self.env.reset()
+
                         print("done")
                         break
 

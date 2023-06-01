@@ -17,7 +17,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/result2/"
+result_dir = "./mpdqn_result/result3/"
 
 ## initial
 request_num = []
@@ -125,7 +125,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request12.txt')
+    f = open('request/request14.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -247,7 +247,7 @@ class Env:
 
         response_time_list = []
         time.sleep(50)  # wait for monitor ture value
-        # while(timestamp % 55 == 0)
+
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -256,8 +256,7 @@ class Env:
             # print(self.service_name, "_done: ", done)
             time.sleep(5)
             event.set()  # if done and after get_response_time
-        # mean_response_time = sum(response_time_list)/len(response_time_list)
-        # print(response_time_list)
+
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
         t_max = 0
