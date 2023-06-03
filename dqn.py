@@ -246,10 +246,8 @@ class Env:
         #     time.sleep(5)  # wait app_mn1 service start
         time.sleep(30)  # wait service start
 
-        if not done:
-            # print(self.service_name, "_done: ", done)
-            # print(self.service_name, "_step complete")
-            event.set()
+
+        event.set()
 
         response_time_list = []
         time.sleep(50)
@@ -257,10 +255,7 @@ class Env:
             time.sleep(1)
             response_time_list.append(self.get_response_time())
 
-        if done:
-            # print(self.service_name, "_done: ", done)
-            time.sleep(5)
-            event.set()  # if done and after get_response_time
+
         # mean_response_time = sum(response_time_list)/len(response_time_list)
         # print(response_time_list)
         mean_response_time = statistics.mean(response_time_list)
@@ -471,9 +466,20 @@ class DQNAgent:
             state = init_state
             done = False
             losses = []
+            while True:
+                if timestamp == 50:
+                    response_time_list = []
+                    for i in range(5):
+                        time.sleep(1)
+                        response_time_list.append(self.env.get_response_time())
+                    mean_response_time = statistics.mean(response_time_list)
+                    mean_response_time = mean_response_time * 1000
+                    Rt = mean_response_time
+                    state[3] = Rt
+                    state[1] = (self.env.get_cpu_utilization() / 100 / self.env.cpus)
+                    break
+            state = np.array(state, dtype=np.float32)
 
-            # if self.env.service_name == "app_mn1":
-            #     print("service name:", self.env.service_name, " episode:", episode)
             event_timestamp_Ccontrol.wait()
             print("service name:", self.env.service_name, " episode:", episode)
             while True:
@@ -492,9 +498,9 @@ class DQNAgent:
                 if timestamp == 0:
                     done = False
                 event_timestamp_Ccontrol.wait()
-                if (((timestamp - 1) % 60) == 0) and (not done):
+                if (((timestamp) % 60) == 0) and (not done)and timestamp!=0:
                     action = self.select_action(state)
-                    if timestamp == (simulation_time - 1):
+                    if timestamp == (simulation_time):
                         done = True
                     else:
                         done = False
@@ -704,7 +710,7 @@ def send_request(stage, request_num, start_time, total_episodes):
     error = 0
     for episode in range(total_episodes):
         timestamp = 0
-        print("episode: ", episode)
+        print("episode: ", episode+1)
         print("reset envronment")
         reset_complete = 0
         reset()  # reset Environment
@@ -713,23 +719,23 @@ def send_request(stage, request_num, start_time, total_episodes):
         reset_complete = 1
         send_finish = 0
         for i in request_num:
-            # print("timestamp: ", timestamp)
-            event_mn1.clear()
+            # print('timestamp: ', timestamp)
+            event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp - 1) % 60) == 0:
-                print("wait mn1 mn2 step ...")
-                event_mn1.wait()
+            if ((timestamp) % 60) == 0 and timestamp!=0 :  # and timestamp<(simulation_time)
+                print("wait mn1 mn2 step and service scaling ...")
+                event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
                 change = 0
             event_timestamp_Ccontrol.clear()
-            exp = np.random.exponential(scale=1 / i, size=i)
+            # exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
             for j in range(i):
                 try:
                     url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                     # change stage
-                    url1 = url + stage[(tmp_count * 10 + j) % 8]
 
+                    url1 = url + stage[(tmp_count * 10 + j) % 8]
                     s_time = time.time()
                     response = post_url(url1, RFID)
                     t_time = time.time()
@@ -744,10 +750,10 @@ def send_request(stage, request_num, start_time, total_episodes):
                 # if use_tm == 1:
                 #     time.sleep(exp[tmp_count])
                 #     tmp_count += 1
-                if rt < (1 / i):
-                    time.sleep(1 / i - rt)  # send requests every 1/is
-
-                time.sleep(1 / i)  # send requests every 1s
+                if rt < (1 / i) and (i > 50):
+                    time.sleep((1 / i) - rt)
+                elif i <= 50:
+                    time.sleep(1 / i)
                 tmp_count += 1
             timestamp += 1
             event_timestamp_Ccontrol.set()
@@ -757,7 +763,6 @@ def send_request(stage, request_num, start_time, total_episodes):
     alltime = final_time - start_time
     store_error_count(error)
     print('time:: ', alltime)
-
 
 
 def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event, service_name):

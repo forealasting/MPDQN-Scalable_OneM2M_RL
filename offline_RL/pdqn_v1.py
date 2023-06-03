@@ -8,6 +8,7 @@ import random
 from memory.memory import Memory
 from utils import soft_update_target_network, hard_update_target_network
 from utils.noise import OrnsteinUhlenbeckActionNoise
+result_dir = "./mpdqn_result/result5/"
 
 class QActor(nn.Module):
 
@@ -18,8 +19,8 @@ class QActor(nn.Module):
         self.action_size = action_size
         self.action_parameter_size = action_parameter_size
         self.activation = activation
-        print("self.state_size: ", self.state_size)
-        print("self.action_size: ", self.action_size)
+        # print("self.state_size: ", self.state_size)
+        # print("self.action_size: ", self.action_size)
         # create layers
         self.layers = nn.ModuleList()
         inputSize = self.state_size + self.action_parameter_size
@@ -159,7 +160,9 @@ class PDQNAgent:
                  average=False,
                  random_weighted=False,
                  device="cuda" if torch.cuda.is_available() else "cpu",
-                 seed=None):
+                 seed=None,
+                 service_name='app_mn1'
+                 ):
         # super(PDQNAgent, self).__init__(observation_space, action_space)
         self.observation_space = observation_space
         self.action_space = action_space
@@ -231,7 +234,7 @@ class PDQNAgent:
         self.actor_param_target.eval()
 
         self.loss_func = loss_func  # l1_smooth_loss performs better but original paper used MSE
-
+        self.service_name = service_name
         # Original DDPG paper [Lillicrap et al. 2016] used a weight decay of 0.01 for Q (critic)
         # but setting weight_decay=0.01 on the critic_optimiser seems to perform worse...
         # using AMSgrad ("fixed" version of Adam, amsgrad=True) doesn't seem to help either...
@@ -359,6 +362,9 @@ class PDQNAgent:
         soft_update_target_network(self.actor, self.actor_target, self.tau_actor)
         soft_update_target_network(self.actor_param, self.actor_param_target, self.tau_actor_param)
 
+        self.store_critic_loss(loss_Q.item())
+        self.store_actor_loss(Q_loss.item())
+
     def save_models(self, prefix):
 
         torch.save(self.actor.state_dict(), prefix + '_actor.pt')
@@ -370,3 +376,17 @@ class PDQNAgent:
         self.actor.load_state_dict(torch.load(prefix + '_actor.pt', map_location='cpu'))
         self.actor_param.load_state_dict(torch.load(prefix + '_actor_param.pt', map_location='cpu'))
         print('Models loaded successfully')
+
+    def store_actor_loss(self, loss):
+        # Write the string to a text file
+        path = result_dir + self.service_name + "_actor_loss.txt"
+        f = open(path, 'a')
+        data = str(loss) + '\n'
+        f.write(data)
+
+    def store_critic_loss(self, loss):
+        # Write the string to a text file
+        path = result_dir + self.service_name + "_critic_loss.txt"
+        f = open(path, 'a')
+        data = str(loss) + '\n'
+        f.write(data)

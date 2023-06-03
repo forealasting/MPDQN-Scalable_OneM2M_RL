@@ -17,14 +17,14 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/result3/"
+result_dir = "./mpdqn_result/result5/"  # need to modify pdqn_v1.py result_dir also
 
 ## initial
 request_num = []
-# timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
-# learning step:          0,  ..., 1,     , 120
+# timestamp    :  0, 1, 2, , ..., 61, ..., 3601
+# learning step:   0,  ..., 1,     , 120
 
-simulation_time = 3602  # 300 s  # 0 ~ 3601:  3602
+simulation_time = 3600 #
 request_n = simulation_time + 60
 
 ## global variable
@@ -58,7 +58,7 @@ if_test = False
 if if_test:
     total_episodes = 1  # Testing_episodes
 
-multipass = True  # False : PDQN  / Ture: MPDQN
+multipass = False  # False : PDQN  / Ture: MPDQN
 
 # Exploration parameters
 epsilon_steps = 840  # episode per step
@@ -81,7 +81,7 @@ seed = 9
 
 clip_grad = 10 # no use now
 action_input_layer = 0  # no use now
-
+cres_norml = False
 # check result directory
 if os.path.exists(result_dir):
     print("Deleting existing result directory...")
@@ -111,6 +111,7 @@ settings = {
     'batch_size': batch_size,
     'loss_function': 'MSE loss',
     'layers': layers,
+    'cres_norml': cres_norml,
     'if_test': if_test,
 }
 
@@ -134,7 +135,7 @@ if use_tm:
 else:
     request_num = [data_rate for i in range(request_n)]
 
-# print("request_num:: ", request_num, "simulation_time:: ", simulation_time)
+print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
 
 
 class Env:
@@ -240,10 +241,7 @@ class Env:
 
         time.sleep(30)  # wait service start
 
-        if not done:
-            # print(self.service_name, "_done: ", done)
-            # print(self.service_name, "_step complete")
-            event.set()
+        event.set()
 
         response_time_list = []
         time.sleep(50)  # wait for monitor ture value
@@ -252,10 +250,6 @@ class Env:
             time.sleep(1)
             response_time_list.append(self.get_response_time())
 
-        if done:
-            # print(self.service_name, "_done: ", done)
-            time.sleep(5)
-            event.set()  # if done and after get_response_time
 
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
@@ -267,11 +261,17 @@ class Env:
             t_max = Tmax_mn2
 
         Rt = mean_response_time
-        if Rt > t_max:
-            c_perf = 1
-        else:
-            tmp_d = 10 * (Rt - t_max) / t_max
-            c_perf = math.exp(tmp_d)
+        # Cost 1
+        # if Rt > t_max:
+        #     c_perf = 1
+        # else:
+        #     tmp_d = 10 * (Rt - t_max) / t_max
+        #     c_perf = math.exp(tmp_d)
+
+        # Cost 2
+        B = 10
+        target = 20 + 2 * math.log(0.9)
+        c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max), 0.9 + ((Rt - target) / (50 - target)) * 0.1)
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
@@ -293,7 +293,7 @@ class Env:
         w_pref = 0.8
         w_res = 0.2
         # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)  # min max normalize
-        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
+        # c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
@@ -351,13 +351,6 @@ def store_reward(service_name, reward):
     f.write(data)
 
 
-def store_loss(service_name, loss):
-    # Write the string to a text file
-    path = result_dir + service_name + "_loss.txt"
-    f = open(path, 'a')
-    data = str(loss) + '\n'
-    f.write(data)
-
 
 def store_trajectory(service_name, step, s, a_r, a_c, r, r_perf, r_res, s_, done):
     path = result_dir + service_name + "_trajectory.txt"
@@ -406,7 +399,7 @@ def send_request(stage, request_num, start_time, total_episodes):
     error = 0
     for episode in range(total_episodes):
         timestamp = 0
-        print("episode: ", episode)
+        print("episode: ", episode+1)
         print("reset envronment")
         reset_complete = 0
         reset()  # reset Environment
@@ -415,16 +408,16 @@ def send_request(stage, request_num, start_time, total_episodes):
         reset_complete = 1
         send_finish = 0
         for i in request_num:
-            # print("timestamp: ", timestamp)
+            # print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp - 1) % 60) == 0:
-                print("wait mn1 mn2 step ...")
+            if ((timestamp) % 60) == 0 and timestamp!=0 :  # and timestamp<(simulation_time)
+                print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
                 change = 0
             event_timestamp_Ccontrol.clear()
-            exp = np.random.exponential(scale=1 / i, size=i)
+            # exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
             for j in range(i):
                 try:
@@ -499,12 +492,13 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                        actor_param_kwargs={'hidden_layers': layers,
                                            'squashing_function': True,
                                            'output_layer_init_std': 0.0001},
-                       seed=seed)
+                       seed=seed,
+                       service_name=service_name)
     # print(agent)
 
     start_time = time.time()
-    init_state = [1, 1.0, 0.5, 40]
-    step = 0
+    init_state = [1, 1.0, 0.5, 20]
+    step = 1
     for episode in range(1, total_episodes+1):
         if if_test:  # Test
             agent.epsilon_final = 0.
@@ -513,19 +507,31 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
         env.reset()
         state = init_state
         done = False
+        while True:
+            if timestamp == 50:
+                response_time_list = []
+                for i in range(5):
+                    time.sleep(1)
+                    response_time_list.append(env.get_response_time())
+                mean_response_time = statistics.mean(response_time_list)
+                mean_response_time = mean_response_time * 1000
+                Rt = mean_response_time
+                state[3] = Rt
+                state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
+                break
         state = np.array(state, dtype=np.float32)
 
         print("service name:", env.service_name, " episode:", episode)
         act, act_param, all_action_parameters = agent.act(state)
+
         action = pad_action(act, act_param)
-        # print(action[0], action[1][action[0]][0])
 
         while True:
             if timestamp == 0:
                 done = False
             event_timestamp_Ccontrol.wait()
-            if (((timestamp - 1) % 60) == 0) and (not done):
-                if timestamp == (simulation_time - 1):
+            if (((timestamp) % 60) == 0) and (not done)and timestamp!=0:
+                if timestamp == (simulation_time):
                     done = True
                 else:
                     done = False
