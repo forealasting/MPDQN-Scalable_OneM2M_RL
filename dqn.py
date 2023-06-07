@@ -28,7 +28,7 @@ request_num = []
 # timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
 # learning step:          0,  ..., 1,     , 120
 #
-simulation_time = 3602  # 300 s  # 0 ~ 3601:  3600
+simulation_time = 3600  # 300 s  # 0 ~ 3601:  3600
 request_n = simulation_time + 60
 
 ## global variable
@@ -55,7 +55,7 @@ Tmax_mn2 = 20
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 8       # Total episodes
+total_episodes = 16       # Total episodes
 learning_rate = 0.01          # Learning rate
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
@@ -63,7 +63,7 @@ max_epsilon = 1
 min_epsilon = 0.01   # 0.01
 epsilon_decay = 1/840  # 1/840
 memory_size = 960
-batch_size = 8
+batch_size = 16
 target_update = 100
 
 seed = 9
@@ -237,8 +237,8 @@ class Env:
                 returned_text = subprocess.check_output(cmd, shell=True)
         else:
             change = 1
-            cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
-            cmd1 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
+            cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
+            cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(self.replica) + " " + self.service_name
             returned_text = subprocess.check_output(cmd, shell=True)
             returned_text = subprocess.check_output(cmd1, shell=True)
 
@@ -461,7 +461,7 @@ class DQNAgent:
         epsilons = []
         init_state = [1, 1.0, 0.5, 40]
         init_state = np.array(init_state, dtype=float)
-        step = 0
+        step = 1
         for episode in range(episodes):
             state = init_state
             done = False

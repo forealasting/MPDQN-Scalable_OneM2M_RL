@@ -8,7 +8,7 @@ import random
 from memory.memory import Memory
 from utils import soft_update_target_network, hard_update_target_network
 from utils.noise import OrnsteinUhlenbeckActionNoise
-result_dir = "./mpdqn_result/result5/"
+result_dir = "./mpdqn_result/result5/evaluate4/"
 
 class QActor(nn.Module):
 

@@ -46,7 +46,7 @@ event_timestamp_Ccontrol = threading.Event()
 ip = "192.168.99.124"  # app_mn1
 ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
-Rmax_mn1 = 30
+Rmax_mn1 = 20
 Rmax_mn2 = 20
 learning_step = 2000  # 960
 offline_learning_complete = True
@@ -81,7 +81,7 @@ initial_memory_threshold = 8  # Number of transitions required to start learning
 use_ornstein_noise = False
 clip_grad = 10
 layers = [64,]
-seed = 7
+seed = 16
 
 action_input_layer = 0  # no use
 # check result directory

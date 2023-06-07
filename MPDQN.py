@@ -17,7 +17,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/result5/"  # need to modify pdqn_v1.py result_dir also
+result_dir = "./mpdqn_result/result5/evaluate4/"  # need to modify pdqn_v1.py result_dir also
 
 ## initial
 request_num = []
@@ -54,7 +54,7 @@ Tmax_mn2 = 20
 total_episodes = 16   # Training_episodes
 
 
-if_test = False
+if_test = True
 if if_test:
     total_episodes = 1  # Testing_episodes
 
@@ -77,18 +77,18 @@ initial_memory_threshold = 16  # Number of transitions required to start learnin
 use_ornstein_noise = False
 
 layers = [64,]
-seed = 9
+seed = 7
 
-clip_grad = 10 # no use now
+clip_grad = 0 # no use now
 action_input_layer = 0  # no use now
 cres_norml = False
 # check result directory
-if os.path.exists(result_dir):
-    print("Deleting existing result directory...")
-    raise SystemExit  # end process
-
-# build dir
-os.mkdir(result_dir)
+# if os.path.exists(result_dir):
+#     print("Deleting existing result directory...")
+#     raise SystemExit  # end process
+#
+# # build dir
+# os.mkdir(result_dir)
 # store setting
 path = result_dir + "setting.txt"
 
@@ -501,6 +501,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     step = 1
     for episode in range(1, total_episodes+1):
         if if_test:  # Test
+            agent.load_models(result_dir + env.service_name + "_" + str(seed))
             agent.epsilon_final = 0.
             agent.epsilon = 0.
             agent.noise = None
@@ -556,14 +557,15 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
                 action = next_action
                 state = next_state
-                agent.epsilon_decay()
+                if not if_test:
+                    agent.epsilon_decay()
 
                 step += 1
                 event_timestamp_Ccontrol.clear()
                 if done:
                     break
     if not if_test:
-        agent.save_models(result_dir)
+        agent.save_models(result_dir + env.service_name + "_" + str(seed))
     end_time = time.time()
     print(end_time-start_time)
 
