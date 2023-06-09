@@ -19,7 +19,7 @@ if_evaluation = 0
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline_result/mpdqn_result/result1"
-tmp_dir = "mpdqn_result/result5/evaluate4"
+tmp_dir = "mpdqn_result/result4/evaluate1"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 

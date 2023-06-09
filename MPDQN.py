@@ -17,14 +17,14 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-result_dir = "./mpdqn_result/result5/evaluate4/"  # need to modify pdqn_v1.py result_dir also
+result_dir = "./mpdqn_result/result5/"  # need to modify pdqn_v1.py result_dir also
 
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
 # learning step:   0,  ..., 1,     , 120
 
-simulation_time = 3600 #
+simulation_time = 3600  #
 request_n = simulation_time + 60
 
 ## global variable
@@ -53,12 +53,11 @@ Tmax_mn2 = 20
 # action_space = ['-r', -1, 0, 1, 'r']
 total_episodes = 16   # Training_episodes
 
-
-if_test = True
+if_test = False
 if if_test:
     total_episodes = 1  # Testing_episodes
 
-multipass = False  # False : PDQN  / Ture: MPDQN
+multipass = True  # False : PDQN  / Ture: MPDQN
 
 # Exploration parameters
 epsilon_steps = 840  # episode per step
@@ -77,18 +76,18 @@ initial_memory_threshold = 16  # Number of transitions required to start learnin
 use_ornstein_noise = False
 
 layers = [64,]
-seed = 7
+seed = 9
 
 clip_grad = 0 # no use now
 action_input_layer = 0  # no use now
 cres_norml = False
 # check result directory
-# if os.path.exists(result_dir):
-#     print("Deleting existing result directory...")
-#     raise SystemExit  # end process
-#
-# # build dir
-# os.mkdir(result_dir)
+if os.path.exists(result_dir):
+    print("Deleting existing result directory...")
+    raise SystemExit  # end process
+
+# build dir
+os.mkdir(result_dir)
 # store setting
 path = result_dir + "setting.txt"
 
@@ -542,7 +541,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
                 # Covert np.float32
                 next_state = np.array(next_state, dtype=np.float32)
-                next_act, next_act_param, next_all_action_parameters = agent.act(next_state)  # next_act: 2 # next_act_param: 0.85845 # next_all_action_parameters: -0.79984,-0.97112,0.85845
+                next_act, next_act_param, next_all_action_parameters = agent.act(next_state)
                 print("service name:", env.service_name, "action: ", act + 1, act_param, all_action_parameters, " step: ", step,
                       " next_state: ",
                       next_state, " reward: ", reward, " done: ", done, "epsilon", agent.epsilon)

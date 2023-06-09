@@ -8,7 +8,7 @@ import random
 from memory.memory import Memory
 from utils import soft_update_target_network, hard_update_target_network
 from utils.noise import OrnsteinUhlenbeckActionNoise
-result_dir = "./mpdqn_result/result5/evaluate4/"
+result_dir = "./mpdqn_result/result5/"
 
 class QActor(nn.Module):
 
@@ -286,8 +286,8 @@ class PDQNAgent:
             offset = np.array([self.action_parameter_sizes[i] for i in range(action)], dtype=int).sum()
             if self.use_ornstein_noise and self.noise is not None:
                 all_action_parameters[offset:offset + self.action_parameter_sizes[action]] += self.noise.sample()[offset:offset + self.action_parameter_sizes[action]]
+            all_action_parameters = np.clip(all_action_parameters, 0.5, 1.0)
             action_parameters = all_action_parameters[offset:offset+self.action_parameter_sizes[action]]
-            action_parameters = np.clip(action_parameters, 0.5, 1.0)
 
         return action, action_parameters, all_action_parameters
 

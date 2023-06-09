@@ -21,7 +21,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 0 # if use_tm
-result_dir = "./dqn_result/result11/"
+result_dir = "./dqn_result/result1/evaluate/"
 
 ## initial
 request_num = []
@@ -42,8 +42,8 @@ event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
 
 # Need modify ip if ip change
-ip = "192.168.99.113"  # app_mn1
-ip1 = "192.168.99.114"  # app_mn2
+ip = "192.168.99.123"  # app_mn1
+ip1 = "192.168.99.124"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
@@ -56,6 +56,11 @@ Tmax_mn2 = 20
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
 total_episodes = 16       # Total episodes
+
+if_test = True
+if if_test:
+    total_episodes = 1  # Testing_episodes
+
 learning_rate = 0.01          # Learning rate
 # Exploration parameters
 gamma = 0.9                 # Discounting rate
@@ -65,19 +70,22 @@ epsilon_decay = 1/840  # 1/840
 memory_size = 960
 batch_size = 16
 target_update = 100
-
+if if_test:
+    max_epsilon = 0
+    min_epsilon = 0
+    epsilon_decay = 0
 seed = 9
 torch.manual_seed(seed)
 np.random.seed(seed)
 
 
 # check result directory
-if os.path.exists(result_dir):
-    print("Deleting existing result directory...")
-    raise SystemExit  # end process
-
-# build dir
-os.mkdir(result_dir)
+# if os.path.exists(result_dir):
+#     print("Deleting existing result directory...")
+#     raise SystemExit  # end process
+#
+# # build dir
+# os.mkdir(result_dir)
 # store setting
 path = result_dir + "setting.txt"
 f = open(path, 'a')
@@ -462,6 +470,8 @@ class DQNAgent:
         init_state = [1, 1.0, 0.5, 40]
         init_state = np.array(init_state, dtype=float)
         step = 1
+        # if if_test:
+        #     self.dqn.load_state_dict(torch.load(result_dir + self.env.service_name + '.pt'))
         for episode in range(episodes):
             state = init_state
             done = False
@@ -484,7 +494,7 @@ class DQNAgent:
             print("service name:", self.env.service_name, " episode:", episode)
             while True:
                 # if training is ready
-                if len(self.memory) >= self.batch_size:
+                if len(self.memory) >= self.batch_size and not if_test:
                     # print("training")
                     loss = self.update_model()
                     losses.append(loss)
@@ -523,13 +533,12 @@ class DQNAgent:
                     step += 1
                     event_timestamp_Ccontrol.clear()
                     if done:
-
-                        print("done")
+                        # print("done")
                         break
 
             # store_reward(self.env.service_name, avg_rewards)
-
-        torch.save(self.dqn, result_dir + self.env.service_name + '.pt')
+        if not if_test:
+            torch.save(self.dqn, result_dir + self.env.service_name + '.pt')
 
 
     def get_available_actions(self, state):
@@ -770,7 +779,83 @@ def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, e
 
     env = Env(service_name)
     agent = DQNAgent(env, memory_size, batch_size, target_update, epsilon_decay, max_epsilon, min_epsilon, gamma)
-    agent.train(total_episodes, event)
+    # agent = torch.load(result_dir + env.service_name + '.pt')
+    if not if_test:
+        agent.train(total_episodes, event)
+    else:
+        test(total_episodes, event, env)
+
+def test(episodes, event, env):
+    agent = torch.load(result_dir + env.service_name + '.pt')
+    init_state = [1, 1.0, 0.5, 40]
+    init_state = np.array(init_state, dtype=float)
+    step = 1
+    for episode in range(episodes):
+        state = init_state
+        done = False
+        while True:
+            print(timestamp)
+            if timestamp == 50:
+                response_time_list = []
+                for i in range(5):
+                    time.sleep(1)
+                    response_time_list.append(env.get_response_time())
+                mean_response_time = statistics.mean(response_time_list)
+                mean_response_time = mean_response_time * 1000
+                Rt = mean_response_time
+                state[3] = Rt
+                state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
+                break
+        state = np.array(state, dtype=np.float32)
+
+        event_timestamp_Ccontrol.wait()
+        print("service name:", env.service_name, " episode:", episode)
+        while True:
+
+            if timestamp == 0:
+                done = False
+            event_timestamp_Ccontrol.wait()
+            if (((timestamp) % 60) == 0) and (not done) and timestamp != 0:
+                actions = [0, 1, 2, 3, 4]  # action index
+                if state[0] == 1:
+                    actions.remove(0)
+                if state[0] == 3:
+                    actions.remove(4)
+                if state[2] == 0.5:
+                    actions.remove(1)
+                if state[2] == 1:
+                    actions.remove(3)
+                """Select an action from the input state."""
+                available_actions = actions
+                action_mask = np.isin(range(5), available_actions)
+                # selected_action_idx = np.where(action_mask)[0]  # find True index
+                q_values = agent(torch.FloatTensor(state).to('cuda'))
+                masked_q_values = torch.where(
+                    torch.BoolTensor(action_mask).to('cuda'),
+                    q_values,
+                    torch.tensor(-np.inf).to('cuda')
+                )
+                selected_action = masked_q_values.argmax()
+                action = selected_action.item()
+
+                if timestamp == (simulation_time):
+                    done = True
+                else:
+                    done = False
+
+                next_state, reward, reward_perf, reward_res = env.step(action, event, done)
+                # if self.env.service_name == "app_mn1":
+                print("service name:", env.service_name, "action: ", action, " step: ", step, " next_state: ",
+                      next_state, " reward: ", reward, " done: ", done)
+                store_trajectory(env.service_name, step, state, action, reward, reward_perf, reward_res,
+                                 next_state, done)
+                state = next_state
+
+                step += 1
+                event_timestamp_Ccontrol.clear()
+                if done:
+                    # print("done")
+                    break
 
 
 start_time = time.time()
