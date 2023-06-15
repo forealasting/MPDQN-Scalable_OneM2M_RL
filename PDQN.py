@@ -17,8 +17,8 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-# result_dir = "./offline_mpdqn_result/result1/"  # need to modify pdqn_v1.py result_dir also
-result_dir = "./mpdqn_result/result4/evaluate11/"
+result_dir = "./pdqn_result/result5/"  # need to modify pdqn_v1.py result_dir also
+
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -55,9 +55,9 @@ total_episodes = 16   # Training_episodes
 
 if_test = True
 if if_test:
-    total_episodes = 1  # Testing_episodes
+    total_episodes = 2  # Testing_episodes
 
-multipass = True  # False : PDQN  / Ture: MPDQN
+multipass = False  # False : PDQN  / Ture: MPDQN
 
 # Exploration parameters
 epsilon_steps = 840  # episode per step
@@ -76,7 +76,7 @@ initial_memory_threshold = 16  # Number of transitions required to start learnin
 use_ornstein_noise = False
 
 layers = [64,]
-seed = 7
+seed = 9
 
 clip_grad = 0 # no use now
 action_input_layer = 0  # no use now
@@ -125,7 +125,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request14.txt')
+    f = open('request/request17.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -142,11 +142,11 @@ class Env:
     def __init__(self, service_name):
 
         self.service_name = service_name
-        self.cpus = 1
+        self.cpus = 0.5
         self.replica = 1
         self.cpu_utilization = 0.0
         self.action_space = ['1', '1', '1']
-        self.state_space = [1, 1.0, 0.5, 20]
+        self.state_space = [1, 0.0, 0.5, 40]  # [1, 0.0, 0.5, 10]
         self.n_state = len(self.state_space)
         self.n_actions = len(self.action_space)
 
@@ -156,12 +156,9 @@ class Env:
                                     "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
     def reset(self):
+        self.cpus = 0.5
         self.replica = 1
-        self.cpus = 1
-        self.state_space[0] = self.replica
-        self.state_space[2] = self.cpus
 
-        return self.state_space
     def get_response_time(self):
 
         path1 = result_dir + self.service_name + "_response.txt"
@@ -245,19 +242,18 @@ class Env:
 
         event.set()
 
-        time.sleep(55)  # wait for monitor ture value
-
         response_time_list = []
+        time.sleep(50)  # wait for monitor ture value
+
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
 
+
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
-
-        self.cpu_utilization = self.get_cpu_utilization()
-
         t_max = 0
+
         if self.service_name == "app_mn1":
             t_max = Tmax_mn1
         elif self.service_name == "app_mn2":
@@ -279,7 +275,12 @@ class Env:
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
         # # k, u, c # r
-
+        self.cpu_utilization = self.get_cpu_utilization()
+        path = result_dir + self.service_name + "_agent_get_cpu.txt"
+        f1 = open(path, 'a')
+        data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
+        f1.write(data)
+        f1.close()
         # u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
         next_state.append(self.cpu_utilization/100/self.cpus)
@@ -333,8 +334,8 @@ def store_cpu(start_time, worker_name):
 def reset():
     cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
     cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
-    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
+    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn1"
+    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn2"
     subprocess.check_output(cmd1, shell=True)
     subprocess.check_output(cmd2, shell=True)
     subprocess.check_output(cmd3, shell=True)
@@ -421,23 +422,35 @@ def send_request(stage, request_num, start_time, total_episodes):
                 try:
                     url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                     # change stage
+
                     url1 = url + stage[(tmp_count * 10 + j) % 8]
+                    s_time = time.time()
                     response = post_url(url1, RFID)
+                    t_time = time.time()
+                    rt = t_time - s_time
                     RFID += 1
 
                 except:
+                    rt = 0.05
                     print("error")
                     error += 1
 
-                time.sleep(1 / i)
+                # if use_tm == 1:
+                #     time.sleep(exp[tmp_count])
+                #     tmp_count += 1
+                if rt < (1 / i) and (i > 50):
+                    time.sleep((1 / i) - rt)
+                elif i <= 50:
+                    time.sleep(1 / i)
                 tmp_count += 1
             timestamp += 1
             event_timestamp_Ccontrol.set()
 
     send_finish = 1
-
+    final_time = time.time()
+    alltime = final_time - start_time
     store_error_count(error)
-
+    print('time:: ', alltime)
 
 
 def pad_action(act, act_param):
@@ -483,7 +496,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     # print(agent)
 
     start_time = time.time()
-    # init_state = [1, 1.0, 1, 20]  # replica / cpu utiliation / cpus / response time
+    init_state = [1, 1.0, 0.5, 20]
     step = 1
     for episode in range(1, total_episodes+1):
         if if_test:  # Test
@@ -491,14 +504,11 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
             agent.epsilon_final = 0.
             agent.epsilon = 0.
             agent.noise = None
-
-        state = env.reset()  #
-
+        env.reset()
+        state = init_state
         done = False
-
         while True:
-            print(timestamp)
-            if timestamp == 55:
+            if timestamp == 50:
                 response_time_list = []
                 for i in range(5):
                     time.sleep(1)
@@ -510,7 +520,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 break
         state = np.array(state, dtype=np.float32)
-        print("service name:", env.service_name, "initial state:", state)
+
         print("service name:", env.service_name, " episode:", episode)
         act, act_param, all_action_parameters = agent.act(state)
 
@@ -520,7 +530,6 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
             if timestamp == 0:
                 done = False
             event_timestamp_Ccontrol.wait()
-
             if (((timestamp) % 60) == 0) and (not done)and timestamp!=0:
                 if timestamp == (simulation_time):
                     done = True
@@ -533,7 +542,6 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 # Covert np.float32
                 next_state = np.array(next_state, dtype=np.float32)
                 next_act, next_act_param, next_all_action_parameters = agent.act(next_state)
-
                 print("service name:", env.service_name, "action: ", act + 1, act_param, all_action_parameters, " step: ", step,
                       " next_state: ",
                       next_state, " reward: ", reward, " done: ", done, "epsilon", agent.epsilon)

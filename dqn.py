@@ -21,7 +21,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 0 # if use_tm
-result_dir = "./dqn_result/result1/evaluate/"
+result_dir = "./dqn_result/result1/evaluate1/"
 
 ## initial
 request_num = []
@@ -42,8 +42,8 @@ event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
 
 # Need modify ip if ip change
-ip = "192.168.99.123"  # app_mn1
-ip1 = "192.168.99.124"  # app_mn2
+ip = "192.168.99.124"  # app_mn1
+ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
@@ -102,7 +102,7 @@ data += 'min_epsilon ' + str(min_epsilon) + '\n'
 data += 'epsilon_decay ' + str(epsilon_decay) + '\n'
 data += 'memory_size ' + str(memory_size) + '\n'
 data += 'batch_size ' + str(batch_size) + '\n'
-data += 'loss function ' + "smooth l1 loss" + '\n'
+data += 'loss function ' + "mse loss" + '\n'
 data += 'target_update ' + str(target_update) + '\n'
 f.write(data)
 f.close()
@@ -113,7 +113,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request12.txt')
+    f = open('request/request17.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -258,7 +258,7 @@ class Env:
         event.set()
 
         response_time_list = []
-        time.sleep(50)
+        time.sleep(55)
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -477,7 +477,7 @@ class DQNAgent:
             done = False
             losses = []
             while True:
-                if timestamp == 50:
+                if timestamp == 55:
                     response_time_list = []
                     for i in range(5):
                         time.sleep(1)
@@ -752,17 +752,14 @@ def send_request(stage, request_num, start_time, total_episodes):
                     RFID += 1
 
                 except:
-                    rt = 0.05
                     print("error")
                     error += 1
 
                 # if use_tm == 1:
                 #     time.sleep(exp[tmp_count])
                 #     tmp_count += 1
-                if rt < (1 / i) and (i > 50):
-                    time.sleep((1 / i) - rt)
-                elif i <= 50:
-                    time.sleep(1 / i)
+
+                time.sleep(1 / i)
                 tmp_count += 1
             timestamp += 1
             event_timestamp_Ccontrol.set()
@@ -787,6 +784,7 @@ def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, e
 
 def test(episodes, event, env):
     agent = torch.load(result_dir + env.service_name + '.pt')
+    print("Model load successfully")
     init_state = [1, 1.0, 0.5, 40]
     init_state = np.array(init_state, dtype=float)
     step = 1
@@ -803,8 +801,8 @@ def test(episodes, event, env):
                 mean_response_time = statistics.mean(response_time_list)
                 mean_response_time = mean_response_time * 1000
                 Rt = mean_response_time
-                state[3] = Rt
                 state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
+                state[3] = Rt
                 break
         state = np.array(state, dtype=np.float32)
 

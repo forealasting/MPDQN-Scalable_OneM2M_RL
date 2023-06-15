@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import statistics
 import re
 import json
 import warnings
@@ -11,21 +10,18 @@ warnings.filterwarnings('ignore', category=MatplotlibDeprecationWarning)
 # request rate r
 # r = '100'
 simulation_time = 3602  # 3602 s
-total_episodes = 1
+total_episodes = 16
 step_per_episodes = 60
-# evaluation
-if_evaluation = 0
-
 # tmp_str = "result2/result_cpu" # result_1016/tm1
-#tmp_dir = "pdqn_result/result2"
-# tmp_dir = "offline_result/mpdqn_result/result1"
-tmp_dir = "mpdqn_result/result4/evaluate1"
+# tmp_dir = "dqn_result/result1/evaluate/"
+tmp_dir = "dqn_result/result2/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
 service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
 Rmax_mn1 = 20
 Rmax_mn2 = 20
+
 # path_evaluate = tmp_dir+"/evaluate/"
 # if not os.path.exists(path_evaluate):
 #     os.makedirs(path_evaluate)
@@ -37,40 +33,29 @@ def parse(p):
         data = f.read().splitlines()
         parsed_data = []
         parsed_line = []
-        tmp = 0
+
         for line in data:
-            tmp += 1
             # parse data
-            # match = re.match(r"(\d+) \[(.+)\] (\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)", line)  # for DQN/Qlearning
+            match = re.match(r"(\d+) \[(.+)\] (\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)", line)  # for DQN/Qlearning
             # match = re.match(
             #     r"(\d+) \[(.+)\] (\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)",
             #     line)  # for PDQN/MPDQN
-            match = re.match(
-                r"(\d+) \[(.+)\] (\d+) \[(.+)\] ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)", line)
-            # match = re.match(r"(\d+) \[(.+)\] (\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)",
-            #                  line)
-            # assert False
 
+            # assert False
             if match != None:
                 # Convert the parsing result to the corresponding Python object
-                # line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
-                #              float(match.group(4)), float(match.group(5)), float(match.group(6)),
-                #              json.loads("[" + match.group(7) + "]"), match.group(8) == "True"]  # for DQN/Qlearning
-                # line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
-                #              float(match.group(4)), json.loads("[" + match.group(5) + "]"), match.group(6) == "True"]
+                line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
+                             float(match.group(4)), float(match.group(5)), float(match.group(6)),
+                             json.loads("[" + match.group(7) + "]"), match.group(8) == "True"]  # for DQN/Qlearning
 
                 # line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
                 #              float(match.group(4)), float(match.group(5)), float(match.group(6)), float(match.group(7)),
                 #              json.loads("[" + match.group(8) + "]"), match.group(9) == "True"]  # for PDQN/MPDQN
-                line_data = [int(match.group(1)), json.loads("[" + match.group(2) + "]"), int(match.group(3)),
-                             json.loads("[" + match.group(4) + "]"), float(match.group(5)), float(match.group(6)),
-                             float(match.group(7)), json.loads("[" + match.group(8) + "]"), match.group(9) == "True"]
+
                 parsed_line.append(line_data)
                 # 9 8
-                # or tmp == 121
-                if match.group(9) == "True"or tmp == 121:
+                if match.group(8) == "True":
                     parsed_data.append(parsed_line)
-                    tmp = 0
                     parsed_line = []
 
     return parsed_data
@@ -93,7 +78,7 @@ def fig_add_Cpus(x, y, service_name):
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 1.1)
-    plt.savefig(tmp_dir + service_name + "_Cpus.png")
+    plt.savefig(tmp_dir + service_name + "_Cpus.png", dpi=300)
     plt.tight_layout()
     plt.show()
 
@@ -110,7 +95,7 @@ def fig_add_Replicas(x, y, service_name):
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 4)
-    plt.savefig(tmp_dir + service_name + "_Replicas.png")
+    plt.savefig(tmp_dir + service_name + "_Replicas.png", dpi=300)
     plt.tight_layout()
     plt.show()
 
@@ -123,19 +108,32 @@ def fig_add_Cpu_utilization(x, y, service_name):
     plt.grid(True)
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 100)
-    plt.savefig(tmp_dir + service_name + "_Cpu_utilization.png")
+    plt.savefig(tmp_dir + service_name + "_Cpu_utilization.png", dpi=300)
     plt.tight_layout()
     plt.show()
 
+def fig_add_response_times(x, y, y_, service_name):
+    plt.figure()
+    # plt.plot(x, y, color="red", alpha=0.2)  # color=color # label=label
+    plt.plot(x, y_, color="purple")  # color=color # label=label
+    avg = sum(y) / len(y)
+    plt.title(service_name + " Avg : " + str(avg))
+    plt.xlabel("step")
+    plt.ylabel("Response time")
+
+    plt.grid(True)
+    plt.axhline(y=Rmax_mn1, color='r', linestyle='--')
+    plt.xlim(0, total_episodes*step_per_episodes)
+    plt.ylim(0, 100)
+    plt.savefig(tmp_dir + service_name + "_Response_time.png", dpi=300)
+    plt.tight_layout()
+    plt.show()
 
 def fig_add_Resource_use(x, y, y_, service_name, dir):
     plt.figure()
     x = [i for i in range(len(y))]
     plt.plot(x, y, color="black", alpha=0.2)  # color=color # label=label
-    if not if_evaluation:
-        plt.plot(x, y_, color="black")  # color=color
-    # print(len(y))
-    # y_m = y[(total_episodes-1)*120+10:]
+    plt.plot(x, y_, color="black")  # color=color
     avg_m = sum(y_) / len(y_)
     print(service_name + " Avg_Resource_use", avg_m)
     avg = sum(y)/len(y)
@@ -145,7 +143,7 @@ def fig_add_Resource_use(x, y, y_, service_name, dir):
     plt.grid(True)
     plt.xlim(0, len(y))
     plt.ylim(0, 3)
-    plt.savefig(dir + service_name + "_Resource_use.png")
+    plt.savefig(dir + service_name + "_Resource_use.png", dpi=300)
     plt.tight_layout()
     plt.show()
 
@@ -162,7 +160,7 @@ def fig_add_reward(x, y, y_, service_name):
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(-0.6, 0)
-    plt.savefig(tmp_dir + service_name + "_cost.png")
+    plt.savefig(tmp_dir + service_name + "_cost.png", dpi=300)
     plt.tight_layout()
     plt.show()
 
@@ -186,9 +184,8 @@ def parse_episods_data(episods_data, service_name):
     cpu_utilization = []
     cpus = []
     reward = []
-    # episode_reward = []
-    # episode_idx = [x for x in range(total_episodes)]
-    # if  if_evaluation:
+    response_times = []
+
     for episode in range(1, total_episodes+1):
         for parsed_line in episods_data[episode-1]:
             # parsed_line = episods_data[episode-1]
@@ -197,26 +194,26 @@ def parse_episods_data(episods_data, service_name):
             replicas.append(parsed_line[1][0])
             cpu_utilization.append(parsed_line[1][1]*100)
             cpus.append(parsed_line[1][2])
-            reward.append(parsed_line[4])  # cost = -reward
-            tmp_step += 1
+            response_times.append(parsed_line[1][3])
+            reward.append(parsed_line[3])  # cost = -reward
+            tmp_step +=1
         # episode_reward.append(sum(reward)/len(reward))
-    # reward[851:871] = [reward[i] - 0.06 for i in range(851, 871)]
-    # reward[871:] = [reward[i] + -0.08 for i in range(871, len(reward))]
+
+    # if service_name == "First_level_mn1":
+    #     response_times[:30] = [x-10 for x in response_times[:30]]
     resource_use = [x * y for x, y in zip(replicas, cpus)]
     replicas_ = moving_average(replicas)
+    response_times_ = moving_average(response_times)
     cpu_utilization_ = moving_average(cpu_utilization)
     cpus_ = moving_average(cpus)
     reward_ = moving_average(reward)
     resource_use_ = moving_average(resource_use)
-    # plot_lsit = [replica, cpu_utilization, cpus, reward, resource_use]
-    # new_step = [i*30 for i in step]
-
     fig_add_Cpus(step, cpus, service_name)
     fig_add_Replicas(step, replicas, service_name)
+    fig_add_response_times(step, response_times, response_times_, service_name)
     fig_add_Cpu_utilization(step, cpu_utilization_, service_name)
     fig_add_Resource_use(step, resource_use, resource_use_, service_name, tmp_dir)
     fig_add_reward(step, reward, reward_, service_name)
-    # fig_add_Resource_use(step, resource_use[(total_episodes-1)*step_per_episodes:], resource_use_[(total_episodes-1)*step_per_episodes:], service_name, path_evaluate)
 
 
 tmp_count = 0
@@ -224,7 +221,6 @@ for p in path_list:
     # print(p)
     # f = open(p, "r")
     episods_data = parse(p)
-    # print(len(episods_data), episods_data)
     # step, replica, cpu_utilization, cpus, reward, resource_use = parse_episods_data(episods_data)
     # print(len(episods_data))
     parse_episods_data(episods_data, service[tmp_count])
@@ -240,65 +236,64 @@ for p in path_list:
 
 
 
-path_1 = tmp_dir + "/app_mn1_response.txt"
-path_2 = tmp_dir + "/app_mn2_response.txt"
-path_list = [path_1, path_2]
-
-service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
+# path_1 = tmp_dir + "/app_mn1_response.txt"
+# path_2 = tmp_dir + "/app_mn2_response.txt"
+# path_list = [path_1, path_2]
+#
 # service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
-tmp = 0
-for path in path_list:
-    with open(path, "r") as f:
-        data = f.read().splitlines()
-        response_time = []
-        for line in data:
-            rt = float(line.split()[2])
-            if rt > 0.05:
-                rt = 0.05
-            response_time.append(rt)
-        #print(response_time)
-        x = []
-        y = []
-        tmp1 = 0
-        for i in range(0, len(response_time), 5):
-            rt_sum = 0
-            for j in range(i, i + 5):
-                rt_sum += float(response_time[j])
-            y.append(rt_sum / 5 * 1000)
-            x.append(tmp1)
-            tmp1 += 1
-
-        y_m = moving_average(y)
-
-        plt.figure()
-
-        # plt.plot(x, y_m, color="purple", alpha=0.2)  # color=color # label=label
-        plt.plot(x, y_m, color="purple")  # color=color # label=label
-        avg = sum(y) / len(y)
-        if service[tmp] == "First_level_mn1":
-            Rmax = Rmax_mn1
-        else:
-            Rmax = Rmax_mn2
-
-
-        result2 = filter(lambda v: v > Rmax, y_m)
-        R = len(list(result2)) / len(y_m)
-        print("Rmax violation: ", R)
-        avg_m = sum(y_m) / len(y_m)
-        print(service[tmp] + "avg: ", avg_m)
-
-        avg = sum(y) / len(y)
-        plt.title(service[tmp] + " Avg : " + str(avg))
-        plt.xlabel("step")
-        plt.ylabel("Response")
-        plt.grid(True)
-        plt.xlim(0, total_episodes*60)
-        plt.axhline(y=Rmax, color='r', linestyle='--')
-        plt.ylim(0, 100)
-        plt.savefig(tmp_dir + service[tmp] + "_Response.png")
-        plt.tight_layout()
-        plt.show()
-    tmp+=1
+# # service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
+# tmp = 0
+# for path in path_list:
+#     with open(path, "r") as f:
+#         data = f.read().splitlines()
+#         response_time = []
+#         for line in data:
+#             rt = float(line.split()[2])
+#             if rt > 0.05:
+#                 rt = 0.05
+#             response_time.append(rt)
+#         #print(response_time)
+#         x = []
+#         y = []
+#         tmp1 = 0
+#         for i in range(0, len(response_time), 5):
+#             rt_sum = 0
+#             for j in range(i, i + 5):
+#                 rt_sum += float(response_time[j])
+#             y.append(rt_sum / 5 * 1000)
+#             x.append(tmp1)
+#             tmp1 += 1
+#
+#         y_m = moving_average(y)
+#
+#         plt.figure()
+#
+#         plt.plot(x, y_m, color="purple", alpha=0.2)  # color=color # label=label
+#         plt.plot(x, y_m, color="purple")  # color=color # label=label
+#         avg = sum(y) / len(y)
+#         if service[tmp] == "First_level_mn1":
+#             Rmax = Rmax_mn1
+#         else:
+#             Rmax = Rmax_mn2
+#
+#         result2 = filter(lambda v: v > Rmax, y_m)
+#         R = len(list(result2)) / len(y_m)
+#         print("Rmax violation: ", R)
+#         avg_m = sum(y_m) / len(y_m)
+#         print(service[tmp] + "avg: ", avg_m)
+#
+#         avg = sum(y) / len(y)
+#         plt.title(service[tmp] + " Avg : " + str(avg))
+#         plt.xlabel("step")
+#         plt.ylabel("Response time")
+#         plt.grid(True)
+#         plt.xlim(0, total_episodes*step_per_episodes)
+#         plt.axhline(y=Rmax, color='r', linestyle='--')
+#         plt.ylim(0, 100)
+#         plt.savefig(tmp_dir + service[tmp] + "_Response.png")
+#         plt.tight_layout()
+#         plt.show()
+#     tmp+=1
 
 # tmp = 0
 #
@@ -319,15 +314,17 @@ for path in path_list:
 #             rt_sum = 0
 #             for j in range(i, i + 5):
 #                 rt_sum += float(response_time[j])
-#             y.append(rt_sum / 5 * 1000 -5)
+#             y.append(rt_sum / 5 * 1000)
 #             x.append(tmp1)
 #             tmp1 += 1
 #         y_m = moving_average(y)
 #         plt.figure()
 #
-#         # plt.plot(x, y_m, color="purple")  # color=color # label=label
+#         # plt.plot(x, y_m, color="purple", alpha=0.2)  # color=color # label=label
 #         x = [i for i in range(len(y[(total_episodes-1)*121:]))]
-#         plt.plot(x, y_m[(total_episodes-1)*121:], color="purple")  # color=color # label=label
+#         plt.plot(x, y[(total_episodes-1)*121:], color="purple")  # color=color # label=label
+#
+#
 #         avg = sum(y) / len(y)
 #         if service[tmp] == "First_level_mn1":
 #             Rmax = Rmax_mn1
@@ -342,12 +339,12 @@ for path in path_list:
 #         avg_m = sum(y_m) / len(y_m)
 #         print(service[tmp] + " Avg: ", avg_m)
 #
-#         response_time_m = response_time[(total_episodes-1)*121*5:]
+#         response_time_m = response_time[(total_episodes-1)*121:]
 #         response_time_m = [x * 1000 for x in response_time_m]
 #         print(len(response_time_m))
 #         # print(response_time_m)
-#         result3 = filter(lambda v: v > Rmax, y_m)
-#         R1 = len(list(result3)) / len(y_m)
+#         result3 = filter(lambda v: v > Rmax, response_time_m)
+#         R1 = len(list(result3)) / len(response_time_m)
 #         print("Rmax violation: ", R1)
 #
 #         avg = sum(y_m) / len(y_m)
@@ -362,6 +359,7 @@ for path in path_list:
 #         plt.tight_layout()
 #         plt.show()
 #     tmp+=1
+
 
 
 
