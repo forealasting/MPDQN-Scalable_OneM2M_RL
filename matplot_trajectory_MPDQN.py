@@ -19,7 +19,7 @@ if_evaluation = 1
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline/database4"
-tmp_dir = "mpdqn_result/result4/evaluate10/"
+tmp_dir = "mpdqn_result/result4/evaluate13/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -113,8 +113,12 @@ def fig_add_Replicas(x, y, service_name):
     plt.show()
 
 
-def fig_add_Cpu_utilization(x, y, service_name):
-    plt.plot(x, y)  # color=color
+def fig_add_Cpu_utilization(x, y, y_, service_name):
+    if not if_evaluation:
+        plt.plot(x, y, color='royalblue', alpha=0.2)  # color=color # label=label
+        plt.plot(x, y_, color='royalblue')  # color=color
+    else:
+        plt.plot(x, y_, color='royalblue')  # color=color # label=label
     plt.title(service_name)
     plt.xlabel("step")
     plt.ylabel("Cpu_utilization")
@@ -125,9 +129,10 @@ def fig_add_Cpu_utilization(x, y, service_name):
     plt.tight_layout()
     plt.show()
 
+
 def fig_add_response_times(x, y, y_, service_name):
     plt.figure()
-    # plt.plot(x, y, color="red", alpha=0.2)  # color=color # label=label
+    plt.plot(x, y, color="purple", alpha=0.2)  # color=color # label=label
     plt.plot(x, y_, color="purple")  # color=color # label=label
     avg = sum(y) / len(y)
 
@@ -150,6 +155,7 @@ def fig_add_response_times(x, y, y_, service_name):
     plt.savefig(tmp_dir + service_name + "_Response_time.png", dpi=300)
     plt.tight_layout()
     plt.show()
+
 
 def fig_add_Resource_use(x, y, y_, service_name, dir):
     plt.figure()
@@ -230,7 +236,7 @@ def parse_episods_data(episods_data, service_name):
 
     resource_use = [x * y for x, y in zip(replicas, cpus)]
     replicas_ = moving_average(replicas)
-    response_times_ = moving_average(response_times, 1)
+    response_times_ = moving_average(response_times)
     cpu_utilization_ = moving_average(cpu_utilization, 1)
     cpus_ = moving_average(cpus)
     reward_ = moving_average(reward)
@@ -238,7 +244,7 @@ def parse_episods_data(episods_data, service_name):
     fig_add_Cpus(step, cpus, service_name)
     fig_add_Replicas(step, replicas, service_name)
     fig_add_response_times(step, response_times, response_times_, service_name)
-    fig_add_Cpu_utilization(step, cpu_utilization_, service_name)
+    fig_add_Cpu_utilization(step, cpu_utilization, cpu_utilization_, service_name)
     fig_add_Resource_use(step, resource_use, resource_use_, service_name, tmp_dir)
     fig_add_reward(step, reward, reward_, service_name)
 

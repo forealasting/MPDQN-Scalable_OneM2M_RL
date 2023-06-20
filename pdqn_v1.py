@@ -8,7 +8,7 @@ import random
 from memory.memory import Memory
 from utils import soft_update_target_network, hard_update_target_network
 from utils.noise import OrnsteinUhlenbeckActionNoise
-result_dir = "./mpdqn_result/result4/evaluate10/"
+# result_dir = "./mpdqn_result/result4/evaluate13/"
 
 class QActor(nn.Module):
     def __init__(self, state_size, action_size, action_parameter_size, hidden_layers=(100,), action_input_layer=0,
@@ -367,8 +367,8 @@ class PDQNAgent:
 
     def load_models(self, prefix):
 
-        self.actor.load_state_dict(torch.load(prefix + '_actor.pt', map_location='cpu'))
-        self.actor_param.load_state_dict(torch.load(prefix + '_actor_param.pt', map_location='cpu'))
+        self.actor.load_state_dict(torch.load(prefix + '_actor.pt'))
+        self.actor_param.load_state_dict(torch.load(prefix + '_actor_param.pt'))
         print('Models loaded successfully')
 
 

@@ -18,7 +18,7 @@ print(datetime.datetime.now())
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
 # result_dir = "./offline_mpdqn_result/result1/"  # need to modify pdqn_v1.py result_dir also
-result_dir = "./mpdqn_result/result4/evaluate11/"
+result_dir = "./mpdqn_result/result4/evaluate14/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -43,7 +43,7 @@ ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
-
+Tupper = 50
 
 ## Learning parameter
 # S ={k, u , c, r} {k, u , c}
@@ -247,6 +247,8 @@ class Env:
 
         time.sleep(55)  # wait for monitor ture value
 
+        self.cpu_utilization = self.get_cpu_utilization()
+
         response_time_list = []
         for i in range(5):
             time.sleep(1)
@@ -254,8 +256,6 @@ class Env:
 
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
-
-        self.cpu_utilization = self.get_cpu_utilization()
 
         t_max = 0
         if self.service_name == "app_mn1":
@@ -273,8 +273,8 @@ class Env:
 
         # Cost 2
         B = 10
-        target = 20 + 2 * math.log(0.9)
-        c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max), 0.9 + ((Rt - target) / (50 - target)) * 0.1)
+        target = t_max + 2 * math.log(0.9)
+        c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max), 0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
@@ -290,7 +290,7 @@ class Env:
         # cost function
         w_pref = 0.8
         w_res = 0.2
-        # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)  # min max normalize
+        # c_perf = 0 + ((c_perf - math.exp(-Tupper/t_max)) / (1 - math.exp(-Tupper/t_max))) * (1 - 0)  # min max normalize
         # c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
@@ -492,13 +492,14 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
             agent.epsilon = 0.
             agent.noise = None
 
-        state = env.reset()  #
+        state = env.reset()  # replica / cpu utiliation / cpus / response time
 
         done = False
 
         while True:
             print(timestamp)
             if timestamp == 55:
+                state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 response_time_list = []
                 for i in range(5):
                     time.sleep(1)
@@ -507,7 +508,6 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 mean_response_time = mean_response_time * 1000
                 Rt = mean_response_time
                 state[3] = Rt
-                state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 break
         state = np.array(state, dtype=np.float32)
         print("service name:", env.service_name, "initial state:", state)
