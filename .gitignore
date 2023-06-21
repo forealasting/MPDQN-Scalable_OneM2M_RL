@@ -18,5 +18,11 @@ test_code/
 
 # cache
 
-__pycache__
+__pycache__/
 .idea/
+memory/__pycache__/
+utils/__pycache__/
+
+
+
+
