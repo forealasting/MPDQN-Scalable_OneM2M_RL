@@ -14,3 +14,9 @@ test_code/
 
 # py
 
+
+
+# cache
+
+__pycache__
+.idea/

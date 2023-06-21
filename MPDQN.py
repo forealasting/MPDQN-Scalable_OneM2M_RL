@@ -18,7 +18,7 @@ print(datetime.datetime.now())
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
 # result_dir = "./offline_mpdqn_result/result1/"  # need to modify pdqn_v1.py result_dir also
-result_dir = "./mpdqn_result/result4/evaluate14/"
+result_dir = "./mpdqn_result/result6/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -53,7 +53,7 @@ Tupper = 50
 # action_space = ['-r', -1, 0, 1, 'r']
 total_episodes = 16   # Training_episodes
 
-if_test = True
+if_test = False
 if if_test:
     total_episodes = 1  # Testing_episodes
 
@@ -82,12 +82,12 @@ clip_grad = 0 # no use now
 action_input_layer = 0  # no use now
 cres_norml = False
 # check result directory
-# if os.path.exists(result_dir):
-#     print("Deleting existing result directory...")
-#     raise SystemExit  # end process
-#
-# # build dir
-# os.mkdir(result_dir)
+if os.path.exists(result_dir):
+    print("Deleting existing result directory...")
+    raise SystemExit  # end process
+
+# build dir
+os.mkdir(result_dir)
 # store setting
 path = result_dir + "setting.txt"
 
@@ -557,8 +557,8 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                     break
     if not if_test:
         agent.save_models(result_dir + env.service_name + "_" + str(seed))
-    end_time = time.time()
-    print(end_time-start_time)
+    # end_time = time.time()
+    # print(end_time-start_time)
 
 
 start_time = time.time()
