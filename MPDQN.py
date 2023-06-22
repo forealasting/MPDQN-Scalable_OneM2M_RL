@@ -217,6 +217,26 @@ class Env:
         avg_replica_cpu_utilization = sum(cpu_list)/len(cpu_list)
         return avg_replica_cpu_utilization
 
+    def get_cpu_utilization_from_data(self):
+        path = result_dir + self.service_name + '_cpu.txt'
+        try:
+            f = open(path, "r")
+            cpu = []
+            time = []
+            for line in f:
+                s = line.split(' ')
+                time.append(float(s[0]))
+                cpu.append(float(s[2]))
+
+            last_avg_cpu = statistics.mean(cpu[-5:])
+            f.close()
+
+            return last_avg_cpu
+        except:
+            print('cant open')
+
+        return last_avg_cpu
+
     def discretize_cpu_value(self, value):
         return int(round(value / 10))
 
@@ -521,7 +541,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 done = False
             event_timestamp_Ccontrol.wait()
 
-            if (((timestamp) % 60) == 0) and (not done)and timestamp!=0:
+            if (((timestamp) % 60) == 0) and (not done) and timestamp!=0:
                 if timestamp == (simulation_time):
                     done = True
                 else:
