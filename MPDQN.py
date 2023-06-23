@@ -226,15 +226,12 @@ class Env:
             for line in f:
                 s = line.split(' ')
                 time.append(float(s[0]))
-                cpu.append(float(s[2]))
+                cpu.append(float(s[1]))
 
             last_avg_cpu = statistics.mean(cpu[-5:])
             f.close()
-
-            return last_avg_cpu
         except:
             print('cant open')
-
         return last_avg_cpu
 
     def discretize_cpu_value(self, value):
@@ -322,7 +319,7 @@ class Env:
 def store_cpu(start_time, worker_name):
     global timestamp, cpus, change, reset_complete
 
-    cmd = "sudo docker-machine ssh " + worker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+    cmd = "sudo docker-machine ssh " + worker_name + " docker stats --no-stream --format \\\"{{ json . }}\\\" "
     while True:
 
         if send_finish == 1:
