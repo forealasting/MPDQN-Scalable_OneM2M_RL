@@ -8,7 +8,7 @@ import random
 from memory.memory import Memory
 from utils import soft_update_target_network, hard_update_target_network
 from utils.noise import OrnsteinUhlenbeckActionNoise
-# result_dir = "./mpdqn_result/result4/evaluate13/"
+result_dir = "./mpdqn_result/result7/"
 
 class QActor(nn.Module):
     def __init__(self, state_size, action_size, action_parameter_size, hidden_layers=(100,), action_input_layer=0,
@@ -358,6 +358,10 @@ class PDQNAgent:
 
         soft_update_target_network(self.actor, self.actor_target, self.tau_actor)
         soft_update_target_network(self.actor_param, self.actor_param_target, self.tau_actor_param)
+        self.store_critic_loss(loss_Q)
+        self.store_actor_loss(Q_loss)
+
+
 
     def save_models(self, prefix):
 

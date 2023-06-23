@@ -11,15 +11,17 @@ warnings.filterwarnings('ignore', category=MatplotlibDeprecationWarning)
 # request rate r
 # r = '100'
 
-total_episodes = 1
+total_episodes = 16
 step_per_episodes = 60
 
 # evaluation
 if_evaluation = 1
+if if_evaluation:
+    total_episodes = 1
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline/database4"
-tmp_dir = "mpdqn_result/result4/evaluate13/"
+tmp_dir = "mpdqn_result/result6/evaluate/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -84,9 +86,6 @@ def fig_add_Cpus(x, y, service_name):
     #　plt.xlabel("step")
     plt.xlabel("step")
     plt.ylabel("Cpus")
-    # plt.ylabel("Resource use ")
-    # plt.ylabel("Replica")
-    # plt.ylabel("Cpus")
     plt.grid(True)
 
     plt.xlim(0, total_episodes*step_per_episodes)
@@ -102,8 +101,6 @@ def fig_add_Replicas(x, y, service_name):
     plt.title(service_name)
     plt.xlabel("step")
     plt.ylabel("Replicas")
-    # plt.ylabel("Replica")
-    # plt.ylabel("Cpus")
     plt.grid(True)
 
     plt.xlim(0, total_episodes*step_per_episodes)
@@ -132,8 +129,11 @@ def fig_add_Cpu_utilization(x, y, y_, service_name):
 
 def fig_add_response_times(x, y, y_, service_name):
     plt.figure()
-    plt.plot(x, y, color="purple", alpha=0.2)  # color=color # label=label
-    plt.plot(x, y_, color="purple")  # color=color # label=label
+    if not if_evaluation:
+        plt.plot(x, y, color="purple", alpha=0.2)  # color=color # label=label
+        plt.plot(x, y_, color="purple")  # color=color # label=label
+    else:
+        plt.plot(x, y, color="purple")  # color=color # label=label
     avg = sum(y) / len(y)
 
     plt.title(service_name + " Avg : " + str(avg))
@@ -226,11 +226,18 @@ def parse_episods_data(episods_data, service_name):
             # step.append(parsed_line[0])
             step.append(tmp_step)
             replicas.append(parsed_line[1][0])
+            cpus.append(parsed_line[1][2])
             cpu_utilization.append(parsed_line[1][1]*100)
             response_times.append(parsed_line[1][3])
-            cpus.append(parsed_line[1][2])
-            reward.append(parsed_line[4])  # cost = -reward
+            # reward.append(parsed_line[4])  # cost = -reward
             tmp_step += 1
+            if tmp_step == 60:
+                print('111')
+                step.append(tmp_step)
+                replicas.append(parsed_line[7][0])
+                cpus.append(parsed_line[7][2])
+                cpu_utilization.append(parsed_line[7][1] * 100)
+                response_times.append(parsed_line[7][3])
         # episode_reward.append(sum(reward)/len(reward))
 
 
@@ -246,7 +253,7 @@ def parse_episods_data(episods_data, service_name):
     fig_add_response_times(step, response_times, response_times_, service_name)
     fig_add_Cpu_utilization(step, cpu_utilization, cpu_utilization_, service_name)
     fig_add_Resource_use(step, resource_use, resource_use_, service_name, tmp_dir)
-    fig_add_reward(step, reward, reward_, service_name)
+    # fig_add_reward(step, reward, reward_, service_name)
 
 
 tmp_count = 0

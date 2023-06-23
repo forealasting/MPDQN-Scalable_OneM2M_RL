@@ -17,8 +17,8 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-# result_dir = "./offline_mpdqn_result/result1/"  # need to modify pdqn_v1.py result_dir also
-result_dir = "./mpdqn_result/result6/"
+# need to modify pdqn_v1.py result_dir also
+result_dir = "./mpdqn_result/result7/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -267,15 +267,15 @@ class Env:
 
         time.sleep(55)  # wait for monitor ture value
 
-        self.cpu_utilization = self.get_cpu_utilization()
-
         response_time_list = []
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
-
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
+
+        # self.cpu_utilization = self.get_cpu_utilization()
+        self.cpu_utilization = self.get_cpu_utilization_from_data()
 
         t_max = 0
         if self.service_name == "app_mn1":
@@ -519,7 +519,8 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
         while True:
             print(timestamp)
             if timestamp == 55:
-                state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
+                # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
+                state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
                 response_time_list = []
                 for i in range(5):
                     time.sleep(1)
