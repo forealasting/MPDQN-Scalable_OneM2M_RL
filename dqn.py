@@ -20,8 +20,8 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 0 # if use_tm
-result_dir = "./dqn_result/result1/evaluate1/"
+use_tm = 1 # if use_tm
+result_dir = "./dqn_result/result2/evaluate1/"
 
 ## initial
 request_num = []
@@ -47,7 +47,7 @@ ip1 = "192.168.99.125"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
-
+Tupper = 50
 
 ## Learning parameter
 # S ={k, u , c, r}
@@ -113,7 +113,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request17.txt')
+    f = open('request/request14.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -131,10 +131,10 @@ class Env:
     def __init__(self, service_name="app_mn1"):
 
         self.service_name = service_name
-        self.cpus = 0.5
+        self.cpus = 1
         self.replica = 1
         self.cpu_utilization = 0.0
-        self.state_space = [1, 0.0, 0.5, 40]
+        self.state_space = [1, 0.0, 1, 40]
         self.n_state = len(self.state_space)
         self.action_space = ['-r', '-1', '0', '1', 'r']
         self.n_actions = len(self.action_space)
@@ -207,6 +207,23 @@ class Env:
         avg_replica_cpu_utilization = sum(cpu_list) / len(cpu_list)
         return avg_replica_cpu_utilization
 
+    def get_cpu_utilization_from_data(self):
+        path = result_dir + self.service_name + '_cpu.txt'
+        try:
+            f = open(path, "r")
+            cpu = []
+            time = []
+            for line in f:
+                s = line.split(' ')
+                time.append(float(s[0]))
+                cpu.append(float(s[1]))
+
+            last_avg_cpu = statistics.mean(cpu[-5:])
+            f.close()
+        except:
+            print('cant open')
+        return last_avg_cpu
+
     def discretize_cpu_value(self, value):
         return int(round(value / 10))
 
@@ -250,10 +267,8 @@ class Env:
             returned_text = subprocess.check_output(cmd, shell=True)
             returned_text = subprocess.check_output(cmd1, shell=True)
 
-        # if self.service_name == 'app_mn1':
-        #     time.sleep(5)  # wait app_mn1 service start
-        time.sleep(30)  # wait service start
 
+        time.sleep(30)  # wait service start
 
         event.set()
 
@@ -263,7 +278,8 @@ class Env:
             time.sleep(1)
             response_time_list.append(self.get_response_time())
 
-
+        # self.cpu_utilization = self.get_cpu_utilization()
+        self.cpu_utilization = self.get_cpu_utilization_from_data()
         # mean_response_time = sum(response_time_list)/len(response_time_list)
         # print(response_time_list)
         mean_response_time = statistics.mean(response_time_list)
@@ -276,21 +292,22 @@ class Env:
             t_max = Tmax_mn2
 
         Rt = mean_response_time
-        if Rt > t_max:
-            c_perf = 1
-        else:
-            tmp_d = 10 * (Rt - t_max) / t_max
-            c_perf = math.exp(tmp_d)
-
+        # Cost 1
+        # if Rt > t_max:
+        #     c_perf = 1
+        # else:
+        #     tmp_d = 10 * (Rt - t_max) / t_max
+        #     c_perf = math.exp(tmp_d)
+        #
+        # Cost 2
+        B = 10
+        target = t_max + 2 * math.log(0.9)
+        c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max),
+                          0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
         # k, u, c # r
-        self.cpu_utilization = self.get_cpu_utilization()
-        path = result_dir + self.service_name + "_agent_get_cpu.txt"
-        f1 = open(path, 'a')
-        data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
-        f1.write(data)
-        f1.close()
+
         # u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
         next_state.append(self.cpu_utilization/100/self.cpus)
@@ -302,7 +319,7 @@ class Env:
         w_pref = 0.8
         w_res = 0.2
         # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0) # min max normalize
-        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
+        # c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
@@ -479,6 +496,7 @@ class DQNAgent:
             while True:
                 if timestamp == 55:
                     response_time_list = []
+                    state[1] = (self.env.get_cpu_utilization_from_data() / 100 / self.env.cpus)
                     for i in range(5):
                         time.sleep(1)
                         response_time_list.append(self.env.get_response_time())
@@ -486,7 +504,7 @@ class DQNAgent:
                     mean_response_time = mean_response_time * 1000
                     Rt = mean_response_time
                     state[3] = Rt
-                    state[1] = (self.env.get_cpu_utilization() / 100 / self.env.cpus)
+
                     break
             state = np.array(state, dtype=np.float32)
 
@@ -603,8 +621,8 @@ class DQNAgent:
         target = (reward + self.gamma * masked_q_values * mask).to(self.device)
 
         # calculate dqn loss
-        # loss = F.mse_loss(curr_q_value, target)
-        loss = F.smooth_l1_loss(curr_q_value, target)
+        loss = F.mse_loss(curr_q_value, target)
+        # loss = F.smooth_l1_loss(curr_q_value, target)
 
         return loss
 
@@ -612,10 +630,10 @@ class DQNAgent:
         """Hard update: target <- local."""
         self.dqn_target.load_state_dict(self.dqn.state_dict())
 
-def store_cpu(start_time, woker_name):
+def store_cpu(start_time, worker_name):
     global timestamp, cpus, change, reset_complete
 
-    cmd = "sudo docker-machine ssh " + woker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+    cmd = "sudo docker-machine ssh " + worker_name + " docker stats --no-stream --format \\\"{{ json . }}\\\" "
     while True:
 
         if send_finish == 1:
@@ -632,14 +650,10 @@ def store_cpu(start_time, woker_name):
                 name = my_json['Name'].split(".")[0]
                 cpu = my_json['CPUPerc'].split("%")[0]
                 if float(cpu) > 0:
-                    final_time = time.time()
-                    t = final_time - start_time
                     path = result_dir + name + "_cpu.txt"
                     f = open(path, 'a')
-                    data = str(timestamp) + ' ' + str(t) + ' '
-                    # for d in state_u:
+                    data = str(timestamp) + ' '
                     data = data + str(cpu) + ' ' + '\n'
-
                     f.write(data)
                     f.close()
 
@@ -648,8 +662,8 @@ def store_cpu(start_time, woker_name):
 def reset():
     cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
     cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
-    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.5 app_mn2"
+    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
+    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
     subprocess.check_output(cmd1, shell=True)
     subprocess.check_output(cmd2, shell=True)
     subprocess.check_output(cmd3, shell=True)
@@ -755,10 +769,6 @@ def send_request(stage, request_num, start_time, total_episodes):
                     print("error")
                     error += 1
 
-                # if use_tm == 1:
-                #     time.sleep(exp[tmp_count])
-                #     tmp_count += 1
-
                 time.sleep(1 / i)
                 tmp_count += 1
             timestamp += 1
@@ -785,7 +795,7 @@ def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, e
 def test(episodes, event, env):
     agent = torch.load(result_dir + env.service_name + '.pt')
     print("Model load successfully")
-    init_state = [1, 1.0, 0.5, 40]
+    init_state = [1, 1.0, 1, 40]
     init_state = np.array(init_state, dtype=float)
     step = 1
     for episode in range(episodes):
@@ -793,7 +803,8 @@ def test(episodes, event, env):
         done = False
         while True:
             print(timestamp)
-            if timestamp == 50:
+            if timestamp == 55:
+                state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
                 response_time_list = []
                 for i in range(5):
                     time.sleep(1)
@@ -801,7 +812,6 @@ def test(episodes, event, env):
                 mean_response_time = statistics.mean(response_time_list)
                 mean_response_time = mean_response_time * 1000
                 Rt = mean_response_time
-                state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 state[3] = Rt
                 break
         state = np.array(state, dtype=np.float32)

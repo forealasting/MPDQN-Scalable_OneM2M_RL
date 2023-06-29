@@ -31,6 +31,9 @@ f1 = open(path1, 'a')
 #
 #     return data_rate_pattern[:total_time]
 
+
+
+# request17.txt
 def generate_data_rate_pattern(total_time):
     data_rate_pattern = []
     timestamp = 0

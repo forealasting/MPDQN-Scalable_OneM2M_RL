@@ -11,79 +11,138 @@ import statistics
 # define result path
 result_dir = "./threshold_result/result1/"
 
-# delay modify = average every x delay (x = 10, 50, 100)
-# request rate r
-data_rate = 50  # use static request rate
-use_tm = 0  # use dynamic traffic
-error_rate = 0.2   # 0.2/0.5
+print(datetime.datetime.now())
 
+# request rate r
+data_rate = 50      # if not use_tm
+use_tm = 1  # if use_tm
+
+# Warning !!!need to modify pdqn_v1.py loss_result_dir also
+result_dir = "./mpdqn_result/result8/evaluate5/"
 ## initial
 request_num = []
-simulation_time = 3600  # 300 s  # 3600s
-cpus1 = 1
-cpus2 = 1
-replica1 = 1
-replica2 = 1
-request_n = simulation_time
+# timestamp    :  0, 1, 2, , ..., 61, ..., 3601
+# learning step:   0,  ..., 1,     , 120
+
+simulation_time = 3600  #
+request_n = simulation_time + 60
+
+## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
-send_finish = 0
 reset_complete = 0
-timestamp = 0
-RFID = 0
-
-Tmax_mn1 = 20
-Tmax_mn2 = 20
-
-# threshold
-scale_out_threshold = 80  # if cpu utilization >= 80%, scale out
-scale_in_threshold = 20  # if cpu utilization <= 20%, scale in
-
+send_finish = 0
+timestamp = 0  # plus 1 in funcntion : send_request
+RFID = 0  # random number for data
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
 
+# Need modify ip if ip change
 ip = "192.168.99.124"  # app_mn1
 ip1 = "192.168.99.125"  # app_mn2
-# url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+
+
+# Parameter
+w_pref = 0.8
+w_res = 0.2
+error_rate = 0.2  # 0.2/0.5
+Tmax_mn1 = 20
+Tmax_mn2 = 20
+Tupper = 50
+
+## Learning parameter
+# S ={k, u , c, r} {k, u , c}
+# k (replica): 1 ~ 3                          actual value : same
+# u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
+# c (used cpus) : 0.1 0.2 ... 1               actual value : same
+# action_space = ['-r', -1, 0, 1, 'r']
+total_episodes = 16   # Training_episodes
+
+if_test = True
+if if_test:
+    total_episodes = 4  # Testing_episodes
+
+multipass = True  # False : PDQN  / Ture: MPDQN
+
+# Exploration parameters
+epsilon_steps = 840  # episode per step
+epsilon_initial = 1
+epsilon_final = 0.01
+
+# Learning rate
+tau_actor = 0.1
+tau_actor_param = 0.01
+learning_rate_actor = 0.001
+learning_rate_actor_param = 0.001
+gamma = 0.9                 # Discounting rate
+replay_memory_size = 960  # Replay memory
+batch_size = 16
+initial_memory_threshold = 16  # Number of transitions required to start learning
+use_ornstein_noise = False
+layers = [64,]
+seed = 7
+
+clip_grad = 0 # no use now
+action_input_layer = 0  # no use now
+# cres_norml = False
+if not if_test:
+    # check result directory
+    if os.path.exists(result_dir):
+        print("Deleting existing result directory...")
+        raise SystemExit  # end process
+
+    # build dir
+    os.mkdir(result_dir)
+# store setting
+path = result_dir + "setting.txt"
+
+# Define settings dictionary
+settings = {
+    'date': datetime.datetime.now(),
+    'data_rate': data_rate,
+    'use_tm': use_tm,
+    'Tmax_mn1': Tmax_mn1,
+    'Tmax_mn2': Tmax_mn2,
+    'simulation_time': simulation_time,
+    'tau_actor': tau_actor,
+    'tau_actor_param': tau_actor_param,
+    'learning_rate_actor': learning_rate_actor,
+    'learning_rate_actor_param': learning_rate_actor_param,
+    'gamma': gamma,
+    'epsilon_steps': epsilon_steps,
+    'epsilon_final': epsilon_final,
+    'replay_memory_size': replay_memory_size,
+    'batch_size': batch_size,
+    'loss_function': 'MSE loss',
+    'layers': layers,
+    'if_test': if_test,
+    'w_pref': w_pref,
+    'w_res': w_res,
+}
+
+
+# Write settings to file
+with open(result_dir + 'setting.txt', 'a') as f:
+    for key, value in settings.items():
+        f.write(f'{key}: {value}\n')
 
 
 ## 8 stage
 stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
-
-
-# check result directory
-if os.path.exists(result_dir):
-    print("Deleting existing result directory...")
-    raise SystemExit  # end process
-
-# build dir
-os.mkdir(result_dir)
-
-# store setting
-path = result_dir + "setting.txt"
-f = open(path, 'a')
-data = 'data_rate: ' + str(data_rate) + '\n'
-data += 'use_tm: ' + str(use_tm) + '\n'
-data += 'simulation_time ' + str(simulation_time) + '\n'
-data += 'cpus: ' + str(cpus1) + '\n'
-data += 'replica ' + str(replica1) + '\n'
-f.write(data)
-f.close()
-
 if use_tm:
-    #   Modify the workload path if it is different
-    f = open('request/request6.txt')
+    f = open('request/request14.txt')
 
     for line in f:
         if len(request_num) < request_n:
 
             request_num.append(int(float(line)))
 else:
-    request_num = [data_rate for i in range(simulation_time)]
+    request_num = [data_rate for i in range(request_n)]
 
-print('request_num:: ', len(request_num))
+print("request_num:: ", len(request_num), "simulation_time:: ", simulation_time)
+
 
 class Env:
 
@@ -93,8 +152,8 @@ class Env:
         self.cpus = 1
         self.replica = 1
         self.cpu_utilization = 0.0
-        self.action_space = ['-1', 0, '1']
-        self.state_space = [1, 0.0, 0.5, 40]  # [1, 0.0, 0.5, 10]
+        self.action_space = ['1', '1', '1']
+        self.state_space = [1, 1.0, 1, 20]
         self.n_state = len(self.state_space)
         self.n_actions = len(self.action_space)
 
@@ -104,9 +163,12 @@ class Env:
                                     "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
     def reset(self):
-        self.cpus = 0.5
         self.replica = 1
+        self.cpus = 1
+        self.state_space[0] = self.replica
+        self.state_space[2] = self.cpus
 
+        return self.state_space
     def get_response_time(self):
 
         path1 = result_dir + self.service_name + "_response.txt"
@@ -162,78 +224,95 @@ class Env:
         avg_replica_cpu_utilization = sum(cpu_list)/len(cpu_list)
         return avg_replica_cpu_utilization
 
+    def get_cpu_utilization_from_data(self):
+        path = result_dir + self.service_name + '_cpu.txt'
+        try:
+            f = open(path, "r")
+            cpu = []
+            time = []
+            for line in f:
+                s = line.split(' ')
+                time.append(float(s[0]))
+                cpu.append(float(s[1]))
+
+            last_avg_cpu = statistics.mean(cpu[-5:])
+            f.close()
+        except:
+            print('cant open')
+        return last_avg_cpu
+
     def discretize_cpu_value(self, value):
         return int(round(value / 10))
 
     def step(self, action, event, done):
         global timestamp, send_finish, change, simulation_time
 
-        if action == '-r':
-            if self.replica > 1:
-                self.replica -= 1
+        if action == '-1':
+            if self.cpus >= 0.5:
+                self.cpus -= 0.1
+                self.cpus = round(self.cpus,
+                                  1)  # Prevent python Output float error : 0.8 -  0.1   Output:  0.7999999999999999
                 change = 1
-                cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(
-                    self.replica)
+                cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(
+                    self.cpus) + " " + self.service_name
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        if action == 'r':
-            if self.replica < 3:
-                self.replica += 1
+        if action == '1':
+            if self.cpus < 1:
+                self.cpus += 0.1
+                self.cpus = round(self.cpus, 1)
                 change = 1
-                cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(
-                    self.replica)
+                cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(
+                    self.cpus) + " " + self.service_name
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        if  action == '0':
-            cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(
-                self.replica)
+        else:
+            change = 1
+            cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
+            cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(self.replica) + " " + self.service_name
             returned_text = subprocess.check_output(cmd, shell=True)
+            returned_text = subprocess.check_output(cmd1, shell=True)
 
         time.sleep(30)  # wait service start
 
-        if not done:
-            # print(self.service_name, "_done: ", done)
-            # print(self.service_name, "_step complete")
-            event.set()
+        event.set()
+
+        time.sleep(50)  # wait for monitor ture value
 
         response_time_list = []
-        time.sleep(50)
+        # self.cpu_utilization = self.get_cpu_utilization()
+        self.cpu_utilization = self.get_cpu_utilization_from_data()
+
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
-
-        if done:
-            # print(self.service_name, "_done: ", done)
-            time.sleep(5)
-            event.set()  # if done and after get_response_time
-        # mean_response_time = sum(response_time_list)/len(response_time_list)
-        # print(response_time_list)
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
-        t_max = 0
 
+        t_max = 0
         if self.service_name == "app_mn1":
             t_max = Tmax_mn1
         elif self.service_name == "app_mn2":
             t_max = Tmax_mn2
 
         Rt = mean_response_time
-        if Rt > t_max:
-            c_perf = 1
-        else:
-            tmp_d = 10*(Rt - t_max)/t_max
-            c_perf = math.exp(tmp_d)
+        # Cost 1
+        # B = 10
+        # if Rt > t_max:
+        #     c_perf = 1
+        # else:
+        #     tmp_d = B * (Rt - t_max) / t_max
+        #     c_perf = math.exp(tmp_d)
 
+        # Cost 2
+        B = 10
+        target = t_max + 2 * math.log(0.9)
+        c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max), 0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
         # # k, u, c # r
-        self.cpu_utilization = self.get_cpu_utilization()
-        path = result_dir + self.service_name + "_agent_get_cpu.txt"
-        f1 = open(path, 'a')
-        data = str(timestamp) + ' ' + str(self.cpu_utilization) + '\n'
-        f1.write(data)
-        f1.close()
+
         # u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
         next_state.append(self.cpu_utilization/100/self.cpus)
@@ -242,10 +321,9 @@ class Env:
         # next_state.append(request_num[timestamp])
 
         # cost function
-        w_pref = 0.8
-        w_res = 0.2
-        # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0)
-        c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # normalize to [0, 1]
+
+        # c_perf = 0 + ((c_perf - math.exp(-Tupper/t_max)) / (1 - math.exp(-Tupper/t_max))) * (1 - 0)  # min max normalize
+        # c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
         reward_perf = w_pref * c_perf
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
@@ -322,6 +400,14 @@ def store_cpu(start_time, woker_name):
                 f.close()
 
 
+def store_error_count(error):
+    # Write the string to a text file
+    path = result_dir + "error.txt"
+    f = open(path, 'a')
+    data = str(error) + '\n'
+    f.write(data)
+
+
 def store_trajectory(service_name, step, s, a, r, r_perf, r_res, s_, done):
     path = result_dir + service_name + "_trajectory.txt"
     tmp_s = list(s)
@@ -341,76 +427,51 @@ def reset():
     subprocess.check_output(cmd4, shell=True)
 
 def send_request(stage, request_num, start_time):
-    global change, send_finish
+    global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
-    timestamp = 0
     error = 0
+    for episode in range(total_episodes):
+        timestamp = 0
+        print("episode: ", episode + 1)
+        print("reset envronment")
+        reset_complete = 0
+        reset()  # reset Environment
+        time.sleep(70)
+        print("reset envronment complete")
+        reset_complete = 1
+        send_finish = 0
+        for i in request_num:
+            # print('timestamp: ', timestamp)
+            event_mn1.clear()  # set flag to false
+            event_mn2.clear()
+            if ((timestamp) % 60) == 0 and timestamp != 0:  # and timestamp<(simulation_time)
+                print("wait mn1 mn2 step and service scaling ...")
+                event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
+                event_mn2.wait()
+                change = 0
+            event_timestamp_Ccontrol.clear()
+            # exp = np.random.exponential(scale=1 / i, size=i)
+            tmp_count = 0
+            for j in range(i):
+                try:
+                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+                    # change stage
+                    url1 = url + stage[(tmp_count * 10 + j) % 8]
+                    response = post_url(url1, RFID)
+                    RFID += 1
 
-    print("reset envronment")
-    reset_complete = 0
-    reset()  # reset Environment
-    time.sleep(70)
-    print("reset envronment complete")
-    reset_complete = 1
-    send_finish = 0
+                except:
+                    print("error")
+                    error += 1
 
-    for j in range(data_rate):
-        tmp_count = 0
-        try:
-            # change stage
-            url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-            url1 = url + stage[(tmp_count * 10 + j) % 8]
-            s_time = time.time()
-            response = post_url(url1, RFID)
-            t_time = time.time()
-            rt = t_time - s_time
-            RFID += 1
-
-        except:
-            rt = 0.05
-            print("error")
-            error += 1
-        time.sleep(1 / data_rate)
-
-    for i in request_num:
-        # print("timestamp: ", timestamp)
-        # exp = np.random.exponential(scale=1 / i, size=i)
-        tmp_count = 0
-        event_mn1.clear()  # set flag to false
-        event_mn2.clear()  # set flag to false
-        if (timestamp % 60 == 0 and timestamp != 0):
-            print("wait mn1 mn2 step ...")
-            event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
-            event_mn2.wait()
-            change = 0
-        for j in range(i):
-            try:
-                # change stage
-                url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-                url1 = url + stage[(tmp_count * 10 + j) % 8]
-                s_time = time.time()
-                response = post_url(url1, RFID)
-                t_time = time.time()
-                rt = t_time - s_time
-                RFID += 1
-
-            except:
-                rt = 0.1
-                print("error")
-                error += 1
-
-            if rt < (1 / i) and (i > 50):
-                time.sleep((1 / i) - rt)
-            elif i <= 50:
                 time.sleep(1 / i)
-            tmp_count += 1
+                tmp_count += 1
+            timestamp += 1
+            event_timestamp_Ccontrol.set()
 
-        timestamp += 1
-
-    final_time = time.time()
-    alltime = final_time - start_time
-    print('time:: ', alltime)
     send_finish = 1
+
+    store_error_count(error)
 
 
 def agent_threshold_mn1(event):
@@ -458,7 +519,7 @@ def agent_threshold_mn2(event):
     service_name = "app_mn2"
     env = Env(service_name)
     step = 0
-    init_state = [1, 0.0, 0.5, 35]
+    init_state = [1, 0.0, 1.0, 35]
     state = init_state
     # action: +1 scale out -1 scale in
     while True:

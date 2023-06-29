@@ -8,7 +8,9 @@ import random
 from memory.memory import Memory
 from utils import soft_update_target_network, hard_update_target_network
 from utils.noise import OrnsteinUhlenbeckActionNoise
-result_dir = "./mpdqn_result/result7/"
+
+# result for store loss
+loss_result_dir = "./mpdqn_result/result8/"
 
 class QActor(nn.Module):
     def __init__(self, state_size, action_size, action_parameter_size, hidden_layers=(100,), action_input_layer=0,
@@ -378,7 +380,7 @@ class PDQNAgent:
 
     def store_actor_loss(self, loss):
         # Write the string to a text file
-        path = result_dir + self.service_name + "_actor_loss.txt"
+        path = loss_result_dir + self.service_name + "_actor_loss.txt"
         #path = "actor_loss.txt"
         f = open(path, 'a')
         data = str(loss) + '\n'
@@ -386,7 +388,7 @@ class PDQNAgent:
 
     def store_critic_loss(self, loss):
         # Write the string to a text file
-        path = result_dir + self.service_name + "_critic_loss.txt"
+        path = loss_result_dir + self.service_name + "_critic_loss.txt"
         # path = "critic_loss.txt"
         f = open(path, 'a')
         data = str(loss) + '\n'

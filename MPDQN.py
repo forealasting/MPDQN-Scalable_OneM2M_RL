@@ -17,8 +17,9 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
-# need to modify pdqn_v1.py result_dir also
-result_dir = "./mpdqn_result/result7/"
+
+# Warning !!!need to modify pdqn_v1.py loss_result_dir also
+result_dir = "./mpdqn_result/result8/evaluate5/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -40,6 +41,11 @@ event_timestamp_Ccontrol = threading.Event()
 # Need modify ip if ip change
 ip = "192.168.99.124"  # app_mn1
 ip1 = "192.168.99.125"  # app_mn2
+
+
+# Parameter
+w_pref = 0.8
+w_res = 0.2
 error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
@@ -53,9 +59,9 @@ Tupper = 50
 # action_space = ['-r', -1, 0, 1, 'r']
 total_episodes = 16   # Training_episodes
 
-if_test = False
+if_test = True
 if if_test:
-    total_episodes = 1  # Testing_episodes
+    total_episodes = 4  # Testing_episodes
 
 multipass = True  # False : PDQN  / Ture: MPDQN
 
@@ -74,20 +80,20 @@ replay_memory_size = 960  # Replay memory
 batch_size = 16
 initial_memory_threshold = 16  # Number of transitions required to start learning
 use_ornstein_noise = False
-
 layers = [64,]
 seed = 7
 
 clip_grad = 0 # no use now
 action_input_layer = 0  # no use now
-cres_norml = False
-# check result directory
-if os.path.exists(result_dir):
-    print("Deleting existing result directory...")
-    raise SystemExit  # end process
+# cres_norml = False
+if not if_test:
+    # check result directory
+    if os.path.exists(result_dir):
+        print("Deleting existing result directory...")
+        raise SystemExit  # end process
 
-# build dir
-os.mkdir(result_dir)
+    # build dir
+    os.mkdir(result_dir)
 # store setting
 path = result_dir + "setting.txt"
 
@@ -110,9 +116,11 @@ settings = {
     'batch_size': batch_size,
     'loss_function': 'MSE loss',
     'layers': layers,
-    'cres_norml': cres_norml,
     'if_test': if_test,
+    'w_pref': w_pref,
+    'w_res': w_res,
 }
+
 
 # Write settings to file
 with open(result_dir + 'setting.txt', 'a') as f:
@@ -146,7 +154,7 @@ class Env:
         self.replica = 1
         self.cpu_utilization = 0.0
         self.action_space = ['1', '1', '1']
-        self.state_space = [1, 1.0, 0.5, 20]
+        self.state_space = [1, 1.0, 1, 20]
         self.n_state = len(self.state_space)
         self.n_actions = len(self.action_space)
 
@@ -243,7 +251,8 @@ class Env:
 
         action_replica = action[0]
         action_cpus = action[1][action_replica][0]
-        if (action_replica + 1) == self.replica and action_cpus == self.cpus:
+        self.cpus = round(action_cpus, 2)
+        if ((action_replica + 1) == self.replica) and (action_cpus == self.cpus):
             cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
             cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(action_replica + 1) + " " + self.service_name
             returned_text = subprocess.check_output(cmd, shell=True)
@@ -262,17 +271,17 @@ class Env:
 
         event.set()
 
-        time.sleep(55)  # wait for monitor ture value
+        time.sleep(50)  # wait for monitor ture value
 
         response_time_list = []
+        # self.cpu_utilization = self.get_cpu_utilization()
+        self.cpu_utilization = self.get_cpu_utilization_from_data()
+
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
-
-        # self.cpu_utilization = self.get_cpu_utilization()
-        self.cpu_utilization = self.get_cpu_utilization_from_data()
 
         t_max = 0
         if self.service_name == "app_mn1":
@@ -282,10 +291,11 @@ class Env:
 
         Rt = mean_response_time
         # Cost 1
+        # B = 10
         # if Rt > t_max:
         #     c_perf = 1
         # else:
-        #     tmp_d = 10 * (Rt - t_max) / t_max
+        #     tmp_d = B * (Rt - t_max) / t_max
         #     c_perf = math.exp(tmp_d)
 
         # Cost 2
@@ -305,8 +315,7 @@ class Env:
         # next_state.append(request_num[timestamp])
 
         # cost function
-        w_pref = 0.8
-        w_res = 0.2
+
         # c_perf = 0 + ((c_perf - math.exp(-Tupper/t_max)) / (1 - math.exp(-Tupper/t_max))) * (1 - 0)  # min max normalize
         # c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
         reward_perf = w_pref * c_perf
@@ -339,7 +348,6 @@ def store_cpu(start_time, worker_name):
                     path = result_dir + name + "_cpu.txt"
                     f = open(path, 'a')
                     data = str(timestamp) + ' '
-                    # for d in state_u:
                     data = data + str(cpu) + ' ' + '\n'
 
                     f.write(data)
@@ -515,7 +523,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
         while True:
             print(timestamp)
-            if timestamp == 55:
+            if timestamp == 50:
                 # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
                 response_time_list = []
