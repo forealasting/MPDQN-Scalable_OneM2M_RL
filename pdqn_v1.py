@@ -10,7 +10,7 @@ from utils import soft_update_target_network, hard_update_target_network
 from utils.noise import OrnsteinUhlenbeckActionNoise
 
 # result for store loss
-loss_result_dir = "./mpdqn_result/result8/"
+loss_result_dir = "./mpdqn_result/result9/"
 
 class QActor(nn.Module):
     def __init__(self, state_size, action_size, action_parameter_size, hidden_layers=(100,), action_input_layer=0,
@@ -122,7 +122,7 @@ class ParamActor(nn.Module):
         action_params += self.action_parameters_passthrough_layer(state)
 
         if self.squashing_function:
-            action_params = action_params.sigmoid()
+            action_params = action_params.sigmoid()  # [0, 1]
 
         return action_params
 
@@ -287,8 +287,18 @@ class PDQNAgent:
             offset = np.array([self.action_parameter_sizes[i] for i in range(action)], dtype=int).sum()
             if self.use_ornstein_noise and self.noise is not None:
                 all_action_parameters[offset:offset + self.action_parameter_sizes[action]] += self.noise.sample()[offset:offset + self.action_parameter_sizes[action]]
-            all_action_parameters = np.clip(all_action_parameters, 0.5, 1.0)
+            # # clip action
+            # all_action_parameters = np.clip(all_action_parameters, 0.5, 1.0)
+
+            # scale action from [0, 1] to [0.5, 1]
+            output_min = 0  # sigmoid min
+            output_max = 1  # sigmoid max
+            action_min = 0.5  # ACTION SPACE min
+            action_max = 1  # ACTION SPACE max
+            all_action_parameters = ((all_action_parameters - output_min) * (action_max - action_min) / (output_max - output_min)) + action_min
+
             action_parameters = all_action_parameters[offset:offset+self.action_parameter_sizes[action]]
+
 
         return action, action_parameters, all_action_parameters
 

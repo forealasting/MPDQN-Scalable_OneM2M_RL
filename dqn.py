@@ -109,7 +109,7 @@ f.close()
 
 
 ## 7/8 stage
-stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
+sensors = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
@@ -727,7 +727,7 @@ def post_url(url, RFID):
 
     return response
 
-def send_request(stage, request_num, start_time, total_episodes):
+def send_request(sensors, request_num, start_time, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
@@ -758,7 +758,7 @@ def send_request(stage, request_num, start_time, total_episodes):
                     url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                     # change stage
 
-                    url1 = url + stage[(tmp_count * 10 + j) % 8]
+                    url1 = url + sensors[(tmp_count * 10 + j) % 8]
                     s_time = time.time()
                     response = post_url(url1, RFID)
                     t_time = time.time()
@@ -868,7 +868,7 @@ def test(episodes, event, env):
 
 start_time = time.time()
 
-t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
+t1 = threading.Thread(target=send_request, args=(sensors, request_num, start_time, total_episodes, ))
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
 t4 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event_mn1, 'app_mn1', ))

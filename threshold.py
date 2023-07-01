@@ -8,8 +8,7 @@ import random
 import os
 import math
 import statistics
-# define result path
-result_dir = "./threshold_result/result1/"
+import  datetime
 
 print(datetime.datetime.now())
 
@@ -17,8 +16,8 @@ print(datetime.datetime.now())
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
 
-# Warning !!!need to modify pdqn_v1.py loss_result_dir also
-result_dir = "./mpdqn_result/result8/evaluate5/"
+# result path
+result_dir = "./threshold_result/result2/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -35,7 +34,7 @@ timestamp = 0  # plus 1 in funcntion : send_request
 RFID = 0  # random number for data
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
-event_timestamp_Ccontrol = threading.Event()
+event_timestamp_control = threading.Event()
 
 # Need modify ip if ip change
 ip = "192.168.99.124"  # app_mn1
@@ -56,43 +55,16 @@ Tupper = 50
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 # action_space = ['-r', -1, 0, 1, 'r']
-total_episodes = 16   # Training_episodes
+total_episodes = 1
 
-if_test = True
-if if_test:
-    total_episodes = 4  # Testing_episodes
-
-multipass = True  # False : PDQN  / Ture: MPDQN
-
-# Exploration parameters
-epsilon_steps = 840  # episode per step
-epsilon_initial = 1
-epsilon_final = 0.01
-
-# Learning rate
-tau_actor = 0.1
-tau_actor_param = 0.01
-learning_rate_actor = 0.001
-learning_rate_actor_param = 0.001
-gamma = 0.9                 # Discounting rate
-replay_memory_size = 960  # Replay memory
-batch_size = 16
-initial_memory_threshold = 16  # Number of transitions required to start learning
-use_ornstein_noise = False
-layers = [64,]
 seed = 7
+# check result directory
+if os.path.exists(result_dir):
+    print("Deleting existing result directory...")
+    raise SystemExit  # end process
 
-clip_grad = 0 # no use now
-action_input_layer = 0  # no use now
-# cres_norml = False
-if not if_test:
-    # check result directory
-    if os.path.exists(result_dir):
-        print("Deleting existing result directory...")
-        raise SystemExit  # end process
-
-    # build dir
-    os.mkdir(result_dir)
+# build dir
+os.mkdir(result_dir)
 # store setting
 path = result_dir + "setting.txt"
 
@@ -104,18 +76,6 @@ settings = {
     'Tmax_mn1': Tmax_mn1,
     'Tmax_mn2': Tmax_mn2,
     'simulation_time': simulation_time,
-    'tau_actor': tau_actor,
-    'tau_actor_param': tau_actor_param,
-    'learning_rate_actor': learning_rate_actor,
-    'learning_rate_actor_param': learning_rate_actor_param,
-    'gamma': gamma,
-    'epsilon_steps': epsilon_steps,
-    'epsilon_final': epsilon_final,
-    'replay_memory_size': replay_memory_size,
-    'batch_size': batch_size,
-    'loss_function': 'MSE loss',
-    'layers': layers,
-    'if_test': if_test,
     'w_pref': w_pref,
     'w_res': w_res,
 }
@@ -248,22 +208,18 @@ class Env:
         global timestamp, send_finish, change, simulation_time
 
         if action == '-1':
-            if self.cpus >= 0.5:
-                self.cpus -= 0.1
-                self.cpus = round(self.cpus,
-                                  1)  # Prevent python Output float error : 0.8 -  0.1   Output:  0.7999999999999999
+            if self.replica > 1:
+                self.replica -= 1
                 change = 1
-                cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(
-                    self.cpus) + " " + self.service_name
+                cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(
+                    self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
-        if action == '1':
-            if self.cpus < 1:
-                self.cpus += 0.1
-                self.cpus = round(self.cpus, 1)
+        if action == '+1':
+            if self.replica < 3:
+                self.replica += 1
                 change = 1
-                cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(
-                    self.cpus) + " " + self.service_name
+                cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
         else:
@@ -277,17 +233,18 @@ class Env:
 
         event.set()
 
-        time.sleep(50)  # wait for monitor ture value
+        time.sleep(55)  # wait for monitor ture value
 
         response_time_list = []
-        # self.cpu_utilization = self.get_cpu_utilization()
-        self.cpu_utilization = self.get_cpu_utilization_from_data()
 
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
+
+        # self.cpu_utilization = self.get_cpu_utilization()
+        self.cpu_utilization = self.get_cpu_utilization_from_data()
 
         t_max = 0
         if self.service_name == "app_mn1":
@@ -329,24 +286,6 @@ class Env:
         reward = -(reward_perf + reward_res)
         return next_state, reward, reward_perf, reward_res
 
-def get_cpu_utilization(service_name):
-    path = result_dir + service_name + '_cpu.txt'
-    try:
-        f = open(path, "r")
-        cpu = []
-        time = []
-        for line in f:
-            s = line.split(' ')
-            time.append(float(s[0]))
-            cpu.append(float(s[1]))
-
-        last_avg_cpu = statistics.mean(cpu[-5:])
-        f.close()
-
-        return last_avg_cpu
-    except:
-
-        print('cant open')
 
 
 def post_url(url, RFID):
@@ -370,13 +309,11 @@ def post_url(url, RFID):
     except requests.exceptions.Timeout:
         response = 'timeout'
 
-    return response
 
-
-def store_cpu(start_time, woker_name):
+def store_cpu(woker_name):
     global timestamp, change, reset_complete
 
-    cmd = "sudo docker-machine ssh " + woker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+    cmd = "sudo docker-machine ssh " + woker_name + " docker stats  --no-stream --format \\\"{{ json . }}\\\" "
     while True:
         if send_finish == 1:
             break
@@ -426,7 +363,7 @@ def reset():
     subprocess.check_output(cmd3, shell=True)
     subprocess.check_output(cmd4, shell=True)
 
-def send_request(stage, request_num, start_time):
+def send_request(stage, request_num):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
@@ -449,7 +386,7 @@ def send_request(stage, request_num, start_time):
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
                 change = 0
-            event_timestamp_Ccontrol.clear()
+            event_timestamp_control.clear()
             # exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
             for j in range(i):
@@ -457,7 +394,7 @@ def send_request(stage, request_num, start_time):
                     url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                     # change stage
                     url1 = url + stage[(tmp_count * 10 + j) % 8]
-                    response = post_url(url1, RFID)
+                    post_url(url1, RFID)
                     RFID += 1
 
                 except:
@@ -467,98 +404,72 @@ def send_request(stage, request_num, start_time):
                 time.sleep(1 / i)
                 tmp_count += 1
             timestamp += 1
-            event_timestamp_Ccontrol.set()
+            event_timestamp_control.set()
 
     send_finish = 1
 
     store_error_count(error)
 
 
-def agent_threshold_mn1(event):
+def agent_threshold(event, service_name):
     global T_max, change, send_finish, replica1, cpus1
     global timestamp
     done = False
-    service_name = "app_mn1"
+
     env = Env(service_name)
-    step = 0
-    init_state = [1, 0.0, 0.5, 35]
-    state = init_state
+    step = 1
+    state = env.reset()
+    while True:
+        print(timestamp)
+        if timestamp == 55:
+            # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
+            state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
+            response_time_list = []
+            for i in range(5):
+                time.sleep(1)
+                response_time_list.append(env.get_response_time())
+            mean_response_time = statistics.mean(response_time_list)
+            mean_response_time = mean_response_time * 1000
+            Rt = mean_response_time
+            state[3] = Rt
+            break
     # action: +1 scale out -1 scale in
     while True:
         if timestamp == 0:
             done = False
-        event_timestamp_Ccontrol.wait()
-        if (((timestamp - 1) % 60) == 0) and (not done):
-            if timestamp == (simulation_time - 1):
+        event_timestamp_control.wait()
+        if (((timestamp) % 60) == 0) and (not done) and timestamp!=0:
+            if timestamp == (simulation_time):
                 done = True
             else:
                 done = False
-            if done:
-                break
-
-            cpu_utilization = get_cpu_utilization(service_name)
-            if cpu_utilization >= 80.0:
+            # get state
+            cpu_utilization = state[1]
+            if cpu_utilization >= 0.8:
                 action = "+1"
-            elif cpu_utilization <= 20.0:
-                action = "-1"
-            else:
-                action = "0"
-
-            next_state, reward, reward_perf, reward_res = env.step(action, event, done)
-            store_trajectory(env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
-
-            state = next_state
-            step += 1
-            event_timestamp_Ccontrol.clear()
-
-def agent_threshold_mn2(event):
-    global T_max, change, send_finish, replica2, cpus2
-    global timestamp
-
-    done = False
-    service_name = "app_mn2"
-    env = Env(service_name)
-    step = 0
-    init_state = [1, 0.0, 1.0, 35]
-    state = init_state
-    # action: +1 scale out -1 scale in
-    while True:
-        if timestamp == 0:
-            done = False
-        event_timestamp_Ccontrol.wait()
-        if (((timestamp - 1) % 60) == 0) and (not done):
-            if timestamp == (simulation_time - 1):
-                done = True
-            else:
-                done = False
-            if done:
-                break
-
-            cpu_utilization = get_cpu_utilization(service_name)
-            if cpu_utilization >= 80.0:
-                action = "+1"
-            elif cpu_utilization <= 20.0:
+            elif cpu_utilization <= 0.2:
                 action = "-1"
             else:
                 action = "0"
 
             next_state, reward, reward_perf, reward_res = env.step(action, event, done)
             print("service name:", env.service_name, "action: ", action, " step: ", step, " next_state: ",
-                  next_state, " reward: ", reward, " done: ", done)
+                                     next_state, " reward: ", reward, " done: ", done)
             store_trajectory(env.service_name, step, state, action, reward, reward_perf, reward_res, next_state, done)
 
             state = next_state
             step += 1
-            event_timestamp_Ccontrol.clear()
+            event_timestamp_control.clear()
+        if done:
+            break
 
 
-start_time = time.time()
 
-t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, ))
-t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
-t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
-t4 = threading.Thread(target=agent_threshold_mn1, args=(event_mn1,))
-t5 = threading.Thread(target=agent_threshold_mn2, args=(event_mn2,))
+t1 = threading.Thread(target=send_request, args=(stage, request_num, ))
+t2 = threading.Thread(target=store_cpu, args=('worker',))
+t3 = threading.Thread(target=store_cpu, args=('worker1',))
+t4 = threading.Thread(target=agent_threshold, args=(event_mn1, 'app_mn1', ))
+t5 = threading.Thread(target=agent_threshold, args=(event_mn2, 'app_mn2', ))
 
 t1.start()
 t2.start()

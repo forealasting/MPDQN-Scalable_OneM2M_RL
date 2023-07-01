@@ -31,12 +31,13 @@ def step_req(y):
 def fig_add(x, y):
     plt.plot(x, y)
     plt.title("Workload")
-    plt.xlabel("timestamp")
+    plt.xlabel("timestamp(s)")
     plt.ylabel("Data rate(requests/s) ")
     plt.grid(True)
     plt.ylim(0, 100)
+    plt.xlim(0, 3660)
     # plt.legend()
-    plt.savefig("Data_rate.png", dpi=300)
+    plt.savefig("workload2.png", dpi=300)
     plt.show()
 
 def fig_add1(x, y):
@@ -45,8 +46,9 @@ def fig_add1(x, y):
     plt.xlabel("step")
     plt.ylabel("Data rate(requests/s) ")
     plt.grid(True)
+    plt.xlim(0, 60)
     plt.ylim(0, 100)
-    plt.savefig("Data_rate1.png", dpi=300)
+    plt.savefig("workload2_.png", dpi=300)
     plt.show()
 
 
@@ -57,7 +59,7 @@ for p in path_list:
     y = get_req(f)
     x = [k for k in range(len(y))]
 
-
+    # transform to step
     y_ = step_req(y)
     x_ = [x for x in range(len(y_))]
 

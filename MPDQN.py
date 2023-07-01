@@ -19,21 +19,21 @@ data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
 
 # Warning !!!need to modify pdqn_v1.py loss_result_dir also
-result_dir = "./mpdqn_result/result8/evaluate5/"
+result_dir = "./mpdqn_result/result9/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
 # learning step:   0,  ..., 1,     , 120
 
 simulation_time = 3600  #
-request_n = simulation_time + 60
+request_n = simulation_time + 60  # for last step
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
 reset_complete = 0
 send_finish = 0
 timestamp = 0  # plus 1 in funcntion : send_request
-RFID = 0  # random number for data
+RFID = 0  # oneM2M resource name  (Need different)
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
@@ -56,32 +56,33 @@ Tupper = 50
 # k (replica): 1 ~ 3                          actual value : same
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
-# action_space = ['-r', -1, 0, 1, 'r']
+
 total_episodes = 16   # Training_episodes
 
-if_test = True
+if_test = False
 if if_test:
-    total_episodes = 4  # Testing_episodes
+    total_episodes = 1  # Testing_episodes
 
 multipass = True  # False : PDQN  / Ture: MPDQN
 
 # Exploration parameters
 epsilon_steps = 840  # episode per step
-epsilon_initial = 1
-epsilon_final = 0.01
+epsilon_initial = 1   #
+epsilon_final = 0.01  # 0.01
 
 # Learning rate
-tau_actor = 0.1
 tau_actor_param = 0.01
-learning_rate_actor = 0.001
+tau_actor = 0.05 # 0.1
+
 learning_rate_actor_param = 0.001
+learning_rate_actor = 0.01
 gamma = 0.9                 # Discounting rate
 replay_memory_size = 960  # Replay memory
 batch_size = 16
 initial_memory_threshold = 16  # Number of transitions required to start learning
 use_ornstein_noise = False
 layers = [64,]
-seed = 7
+seed = 77
 
 clip_grad = 0 # no use now
 action_input_layer = 0  # no use now
@@ -128,8 +129,8 @@ with open(result_dir + 'setting.txt', 'a') as f:
         f.write(f'{key}: {value}\n')
 
 
-## 8 stage
-stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
+## 8 sensors
+sensors = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
@@ -154,7 +155,7 @@ class Env:
         self.replica = 1
         self.cpu_utilization = 0.0
         self.action_space = ['1', '1', '1']
-        self.state_space = [1, 1.0, 1, 20]
+        self.state_space = [1, 0, 0.5, 20]
         self.n_state = len(self.state_space)
         self.n_actions = len(self.action_space)
 
@@ -220,7 +221,7 @@ class Env:
             my_json = json.loads(my_data[i] + "}")
             name = my_json['Name'].split(".")[0]
             cpu = my_json['CPUPerc'].split("%")[0]
-            if float(cpu) > 0 and name == self.service_name:
+            if float(cpu) > 0 and (name == self.service_name):
                 cpu_list.append(float(cpu))
         avg_replica_cpu_utilization = sum(cpu_list)/len(cpu_list)
         return avg_replica_cpu_utilization
@@ -271,7 +272,7 @@ class Env:
 
         event.set()
 
-        time.sleep(50)  # wait for monitor ture value
+        time.sleep(55)  # wait for monitor ture value
 
         response_time_list = []
         # self.cpu_utilization = self.get_cpu_utilization()
@@ -283,7 +284,7 @@ class Env:
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
 
-        t_max = 0
+        t_max = 0  # for initial
         if self.service_name == "app_mn1":
             t_max = Tmax_mn1
         elif self.service_name == "app_mn2":
@@ -314,8 +315,7 @@ class Env:
         next_state.append(Rt)
         # next_state.append(request_num[timestamp])
 
-        # cost function
-
+        # normalize
         # c_perf = 0 + ((c_perf - math.exp(-Tupper/t_max)) / (1 - math.exp(-Tupper/t_max))) * (1 - 0)  # min max normalize
         # c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
         reward_perf = w_pref * c_perf
@@ -325,7 +325,7 @@ class Env:
 
 
 
-def store_cpu(start_time, worker_name):
+def store_cpu(worker_name):
     global timestamp, cpus, change, reset_complete
 
     cmd = "sudo docker-machine ssh " + worker_name + " docker stats --no-stream --format \\\"{{ json . }}\\\" "
@@ -355,6 +355,8 @@ def store_cpu(start_time, worker_name):
 
 
 # reset Environment
+# replicas = 1
+# limit-cpu 1
 def reset():
     cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
     cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
@@ -414,9 +416,9 @@ def post_url(url, RFID):
     except requests.exceptions.Timeout:
         response = "timeout"
 
-    return response
+    # return response
 
-def send_request(stage, request_num, start_time, total_episodes):
+def send_request(sensors, request_num, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
@@ -434,7 +436,7 @@ def send_request(stage, request_num, start_time, total_episodes):
             # print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp) % 60) == 0 and timestamp!=0 :  # and timestamp<(simulation_time)
+            if ((timestamp) % 60) == 0 and timestamp!=0 :  # every 60s scaling
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
@@ -445,10 +447,10 @@ def send_request(stage, request_num, start_time, total_episodes):
             for j in range(i):
                 try:
                     url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-                    # change stage
-                    url1 = url + stage[(tmp_count * 10 + j) % 8]
-                    response = post_url(url1, RFID)
-                    RFID += 1
+                    # change sensor
+                    url1 = url + sensors[(tmp_count * 10 + j) % 8]
+                    post_url(url1, RFID)
+                    RFID += 1  # oneM2M resource name  # Plus 1 for different resource name
 
                 except:
                     print("error")
@@ -507,8 +509,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                        service_name=service_name)
     # print(agent)
 
-    start_time = time.time()
-    # init_state = [1, 1.0, 1, 20]  # replica / cpu utiliation / cpus / response time
+    # init_state = [1, 1.0, 0.5, 20]  # replica / cpu utiliation / cpus / response time
     step = 1
     for episode in range(1, total_episodes+1):
         if if_test:  # Test
@@ -523,7 +524,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
         while True:
             print(timestamp)
-            if timestamp == 50:
+            if timestamp == 55:
                 # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
                 response_time_list = []
@@ -587,11 +588,11 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     # print(end_time-start_time)
 
 
-start_time = time.time()
 
-t1 = threading.Thread(target=send_request, args=(stage, request_num, start_time, total_episodes, ))
-t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
-t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
+
+t1 = threading.Thread(target=send_request, args=(sensors, request_num, total_episodes, ))
+t2 = threading.Thread(target=store_cpu, args=('worker',))
+t3 = threading.Thread(target=store_cpu, args=('worker1',))
 t4 = threading.Thread(target=mpdqn, args=(total_episodes, batch_size, gamma, initial_memory_threshold,
         replay_memory_size, epsilon_steps, tau_actor, tau_actor_param, use_ornstein_noise, learning_rate_actor,
         learning_rate_actor_param, epsilon_final,
