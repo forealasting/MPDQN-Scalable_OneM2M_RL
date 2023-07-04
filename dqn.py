@@ -20,8 +20,8 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 1 # if use_tm
-result_dir = "./dqn_result/result2/evaluate1/"
+use_tm = 0 # if use_tm
+result_dir = "./dqn_result/result3/"
 
 ## initial
 request_num = []
@@ -48,7 +48,8 @@ error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
 Tupper = 50
-
+w_pref = 0.5
+w_res = 0.5
 ## Learning parameter
 # S ={k, u , c, r}
 # k (replica): 1 ~ 3                          actual value : same
@@ -57,7 +58,7 @@ Tupper = 50
 # action_space = ['-r', -1, 0, 1, 'r']
 total_episodes = 16       # Total episodes
 
-if_test = True
+if_test = False
 if if_test:
     total_episodes = 1  # Testing_episodes
 
@@ -79,33 +80,40 @@ torch.manual_seed(seed)
 np.random.seed(seed)
 
 
-# check result directory
-# if os.path.exists(result_dir):
-#     print("Deleting existing result directory...")
-#     raise SystemExit  # end process
-#
-# # build dir
-# os.mkdir(result_dir)
+if not if_test:
+    # check result directory
+    if os.path.exists(result_dir):
+        print("Deleting existing result directory...")
+        raise SystemExit  # end process
+
+    # build dir
+    os.mkdir(result_dir)
+
 # store setting
-path = result_dir + "setting.txt"
-f = open(path, 'a')
-data = 'date: ' + str(datetime.datetime.now()) + '\n'
-data += 'data_rate: ' + str(data_rate) + '\n'
-data += 'use_tm: ' + str(use_tm) + '\n'
-data += 'Tmax_mn1 ' + str(Tmax_mn1) + '\n'
-data += 'Tmax_mn2 ' + str(Tmax_mn2) + '\n'
-data += 'simulation_time ' + str(simulation_time) + '\n\n'
-data += 'learning_rate ' + str(learning_rate) + '\n'
-data += 'gamma ' + str(gamma) + '\n'
-data += 'max_epsilon ' + str(max_epsilon) + '\n'
-data += 'min_epsilon ' + str(min_epsilon) + '\n'
-data += 'epsilon_decay ' + str(epsilon_decay) + '\n'
-data += 'memory_size ' + str(memory_size) + '\n'
-data += 'batch_size ' + str(batch_size) + '\n'
-data += 'loss function ' + "mse loss" + '\n'
-data += 'target_update ' + str(target_update) + '\n'
-f.write(data)
-f.close()
+
+settings = {
+    'date': str(datetime.datetime.now()),
+    'data_rate': data_rate,
+    'use_tm': use_tm,
+    'Tmax_mn1': Tmax_mn1,
+    'Tmax_mn2': Tmax_mn2,
+    'simulation_time': simulation_time,
+    'learning_rate': learning_rate,
+    'gamma': gamma,
+    'max_epsilon': max_epsilon,
+    'min_epsilon': min_epsilon,
+    'epsilon_decay': epsilon_decay,
+    'memory_size': memory_size,
+    'batch_size': batch_size,
+    'loss_function': 'mse loss',
+    'target_update': target_update,
+    'w_pref': w_pref,
+    'w_res': w_res
+}
+# Write settings to file
+with open(result_dir + 'setting.txt', 'a') as f:
+    for key, value in settings.items():
+        f.write(f'{key}: {value}\n')
 
 
 ## 7/8 stage
@@ -316,8 +324,7 @@ class Env:
         # next_state.append(req)
 
         # cost function
-        w_pref = 0.8
-        w_res = 0.2
+
         # c_perf = 0 + ((c_perf - math.exp(-50/t_max)) / (1 - math.exp(-50/t_max))) * (1 - 0) # min max normalize
         # c_res = 0 + ((c_res - (1 / 6)) / (1 - (1 / 6))) * (1 - 0)  # min max normalize
         reward_perf = w_pref * c_perf
@@ -511,17 +518,7 @@ class DQNAgent:
             event_timestamp_Ccontrol.wait()
             print("service name:", self.env.service_name, " episode:", episode)
             while True:
-                # if training is ready
-                if len(self.memory) >= self.batch_size and not if_test:
-                    # print("training")
-                    loss = self.update_model()
-                    losses.append(loss)
-                    store_loss(self.env.service_name, loss)
-                    update_cnt += 1
 
-                    # if hard update is needed
-                    if update_cnt % self.target_update == 0:
-                        self._target_hard_update()
 
                 if timestamp == 0:
                     done = False
@@ -547,6 +544,18 @@ class DQNAgent:
                         ) * self.epsilon_decay
                     )
                     epsilons.append(self.epsilon)
+
+                    # if training is ready
+                    if len(self.memory) >= self.batch_size and not if_test:
+                        # print("training")
+                        loss = self.update_model()
+                        losses.append(loss)
+                        store_loss(self.env.service_name, loss)
+                        update_cnt += 1
+
+                        # if hard update is needed
+                        if update_cnt % self.target_update == 0:
+                            self._target_hard_update()
 
                     step += 1
                     event_timestamp_Ccontrol.clear()

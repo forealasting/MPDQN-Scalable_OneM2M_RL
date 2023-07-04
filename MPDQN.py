@@ -19,7 +19,7 @@ data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
 
 # Warning !!!need to modify pdqn_v1.py loss_result_dir also
-result_dir = "./mpdqn_result/result9/"
+result_dir = "./mpdqn_result/result4/evaluate17/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -59,7 +59,7 @@ Tupper = 50
 
 total_episodes = 16   # Training_episodes
 
-if_test = False
+if_test = True
 if if_test:
     total_episodes = 1  # Testing_episodes
 
@@ -72,7 +72,7 @@ epsilon_final = 0.01  # 0.01
 
 # Learning rate
 tau_actor_param = 0.01
-tau_actor = 0.05 # 0.1
+tau_actor = 0.1 # 0.1
 
 learning_rate_actor_param = 0.001
 learning_rate_actor = 0.01
@@ -82,7 +82,7 @@ batch_size = 16
 initial_memory_threshold = 16  # Number of transitions required to start learning
 use_ornstein_noise = False
 layers = [64,]
-seed = 77
+seed = 7
 
 clip_grad = 0 # no use now
 action_input_layer = 0  # no use now
@@ -167,6 +167,10 @@ class Env:
     def reset(self):
         self.replica = 1
         self.cpus = 1
+        if self.service_name == 'app_mn2':
+            self.replica = 1
+            self.cpus = 0.85
+
         self.state_space[0] = self.replica
         self.state_space[2] = self.cpus
 
@@ -252,6 +256,10 @@ class Env:
 
         action_replica = action[0]
         action_cpus = action[1][action_replica][0]
+        if self.service_name == 'app_mn2':
+            action_replica = 0  # replica  = 3
+            action_cpus = 0.9
+
         self.cpus = round(action_cpus, 2)
         if ((action_replica + 1) == self.replica) and (action_cpus == self.cpus):
             cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
@@ -361,7 +369,7 @@ def reset():
     cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
     cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
     cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
+    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.85 app_mn2"
     subprocess.check_output(cmd1, shell=True)
     subprocess.check_output(cmd2, shell=True)
     subprocess.check_output(cmd3, shell=True)
@@ -377,13 +385,13 @@ def store_reward(service_name, reward):
 
 
 
-def store_trajectory(service_name, step, s, a_r, a_c, r, r_perf, r_res, s_, done):
+def store_trajectory(service_name, step, s, a_r, a_c, r, r_perf, r_res, s_, done, if_epsilon):
     path = result_dir + service_name + "_trajectory.txt"
     tmp_s = list(s)
     tmp_s_ = list(s_)
     a_c_ = list(a_c)
     f = open(path, 'a')
-    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a_r) + ' ' + str(a_c_) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
+    data = str(step) + ' ' + str(tmp_s) + ' ' + str(a_r) + ' ' + str(a_c_) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + ' ' + str(if_epsilon) + '\n'
     f.write(data)
 
 
@@ -539,7 +547,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
         state = np.array(state, dtype=np.float32)
         print("service name:", env.service_name, "initial state:", state)
         print("service name:", env.service_name, " episode:", episode)
-        act, act_param, all_action_parameters = agent.act(state)
+        act, act_param, all_action_parameters, if_epsilon = agent.act(state)
 
         action = pad_action(act, act_param)
 
@@ -559,14 +567,14 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
                 # Covert np.float32
                 next_state = np.array(next_state, dtype=np.float32)
-                next_act, next_act_param, next_all_action_parameters = agent.act(next_state)
+                next_act, next_act_param, next_all_action_parameters, if_epsilon = agent.act(next_state)
 
                 print("service name:", env.service_name, "action: ", act + 1, act_param, all_action_parameters, " step: ", step,
                       " next_state: ",
                       next_state, " reward: ", reward, " done: ", done, "epsilon", agent.epsilon)
                 store_trajectory(env.service_name, step, state, act + 1, all_action_parameters, reward, reward_perf,
                                  reward_res,
-                                 next_state, done)
+                                 next_state, done, if_epsilon)
                 next_action = pad_action(next_act, next_act_param)
                 if not if_test:
                     agent.step(state, (act, all_action_parameters), reward, next_state,

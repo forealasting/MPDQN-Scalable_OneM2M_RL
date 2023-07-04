@@ -21,11 +21,11 @@ if if_evaluation:
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline/database4"
-tmp_dir = "mpdqn_result/result4/evaluate16/"
+tmp_dir = "mpdqn_result/result4/evaluate17/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
-service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
+service = ["First_level_MNCSE", "Second_level_MNCSE", "app_mnae1", "app_mnae2"]
 Rmax_mn1 = 20
 Rmax_mn2 = 20
 # path_evaluate = tmp_dir+"/evaluate/"
@@ -144,8 +144,8 @@ def fig_add_response_times(x, y, y_, service_name):
     else:
         Rmax = Rmax_mn2
 
-    result2 = filter(lambda v: v > Rmax, y_)
-    R = len(list(result2)) / len(y_)
+    result2 = filter(lambda v: v > Rmax, y)
+    R = len(list(result2)) / len(y)
     print("Rmax violation: ", R)
 
     plt.grid(True)

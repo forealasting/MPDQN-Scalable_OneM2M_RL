@@ -45,15 +45,15 @@ def generate_data_rate_pattern(total_time):
             data_rate_pattern.append(data_rate)
         if increasing:
             if data_rate < 80:
-                data_rate += 1
+                data_rate += 20
             else:
                 increasing = False
         else:
             if data_rate > 20:
-                data_rate -= 1
+                data_rate -= 20
             else:
                 increasing = True
-        timestamp += 12
+        timestamp += 240
 
     return data_rate_pattern[:total_time]
 

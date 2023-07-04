@@ -268,10 +268,11 @@ class PDQNAgent:
         with torch.no_grad():
             state = torch.from_numpy(state).to(self.device)
             all_action_parameters = self.actor_param.forward(state)
-
+            if_epsilon = False
             # Hausknecht and Stone [2016] use epsilon greedy actions with uniform random action-parameter exploration
             rnd = self.np_random.uniform()
             if rnd < self.epsilon:
+                if_epsilon = True
                 action = self.np_random.choice(self.num_actions)
                 if not self.use_ornstein_noise:
                     all_action_parameters = torch.from_numpy(np.random.uniform(self.action_parameter_min_numpy,
@@ -281,26 +282,27 @@ class PDQNAgent:
                 Q_a = self.actor.forward(state.unsqueeze(0), all_action_parameters.unsqueeze(0))
                 Q_a = Q_a.detach().cpu().data.numpy()
                 action = np.argmax(Q_a)
+                # # clip action
+                # all_action_parameters = np.clip(all_action_parameters, 0.5, 1.0)
+
+                # scale action from [0, 1] to [0.5, 1]
+                output_min = 0  # sigmoid min
+                output_max = 1  # sigmoid max
+                action_min = 0.5  # ACTION SPACE min
+                action_max = 1  # ACTION SPACE max
+                all_action_parameters = ((all_action_parameters - output_min) * (action_max - action_min) / (
+                            output_max - output_min)) + action_min
 
             # add noise only to parameters of chosen action
             all_action_parameters = all_action_parameters.cpu().data.numpy()
             offset = np.array([self.action_parameter_sizes[i] for i in range(action)], dtype=int).sum()
             if self.use_ornstein_noise and self.noise is not None:
                 all_action_parameters[offset:offset + self.action_parameter_sizes[action]] += self.noise.sample()[offset:offset + self.action_parameter_sizes[action]]
-            # # clip action
-            # all_action_parameters = np.clip(all_action_parameters, 0.5, 1.0)
-
-            # scale action from [0, 1] to [0.5, 1]
-            output_min = 0  # sigmoid min
-            output_max = 1  # sigmoid max
-            action_min = 0.5  # ACTION SPACE min
-            action_max = 1  # ACTION SPACE max
-            all_action_parameters = ((all_action_parameters - output_min) * (action_max - action_min) / (output_max - output_min)) + action_min
 
             action_parameters = all_action_parameters[offset:offset+self.action_parameter_sizes[action]]
 
 
-        return action, action_parameters, all_action_parameters
+        return action, action_parameters, all_action_parameters, if_epsilon
 
 
     def step(self, state, action, reward, next_state, next_action, terminal):
