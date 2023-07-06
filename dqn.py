@@ -728,7 +728,7 @@ def post(url):
             "rn": str(RFID),
         }
     }
-    url1 = url + sensors[random.randint(0, 7)]
+    url1 = url + sensors[random.randint(0, 6)]
 
     s_time = time.time()
     try:
@@ -757,12 +757,12 @@ def post_url(url, RFID):
         }
     }
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=0.05)
+        response = requests.post(url, headers=headers, json=data)
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
 
-    return response
+    # return response
 
 
 

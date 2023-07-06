@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 import random
 import requests
@@ -418,17 +420,16 @@ def post(url):
             "rn": str(RFID),
         }
     }
-    url1 = url + sensors[random.randint(0, 7)]
+    url1 = url + sensors[random.randint(0, 6)]
 
     s_time = time.time()
     try:
         response = requests.post(url1, headers=headers, json=data)
-
         rt = time.time() - s_time
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
-        rt = 0.1
+        rt = sys.maxsize
 
     return response, rt
 
@@ -436,14 +437,11 @@ def post(url):
 def post_url(url, rate):
 
     with ThreadPoolExecutor(max_workers=rate) as executor:
-        tmp_count = 0
-        results = []
 
+        results = []
         for i in range(rate):
-            # url1 = url + stage[(timestamp * 10 + tmp_count) % 8]
             results.append(executor.submit(post, url))
             time.sleep(1/rate)  # send requests every 1 / rate s
-
 
         for result in as_completed(results):
             response, response_time = result.result()
