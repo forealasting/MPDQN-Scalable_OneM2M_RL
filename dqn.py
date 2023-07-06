@@ -712,6 +712,34 @@ def store_error_count(error):
     f.write(data)
 
 
+def post(url):
+    RFID = random.randint(0, 1000000)
+
+    if error_rate > random.random():
+        content = "false"
+    else:
+        content = "true"
+    headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
+    data = {
+        "m2m:cin": {
+            "con": content,
+            "cnf": "application/json",
+            "lbl": "req",
+            "rn": str(RFID),
+        }
+    }
+    url1 = url + sensors[random.randint(0, 7)]
+
+    s_time = time.time()
+    try:
+        response = requests.post(url1, headers=headers, json=data)
+        rt = time.time() - s_time
+        response = str(response.status_code)
+    except requests.exceptions.Timeout:
+        response = "timeout"
+
+    return response
+
 
 def post_url(url, RFID):
 
@@ -736,7 +764,10 @@ def post_url(url, RFID):
 
     return response
 
-def send_request(sensors, request_num, start_time, total_episodes):
+
+
+
+def send_request(request_num, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
@@ -754,40 +785,25 @@ def send_request(sensors, request_num, start_time, total_episodes):
             # print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp) % 60) == 0 and timestamp!=0 :  # and timestamp<(simulation_time)
+            if ((timestamp) % 60) == 0 and timestamp!=0 :  # every 60s scaling
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
                 change = 0
+                print("Start Requesting ...")
             event_timestamp_Ccontrol.clear()
             # exp = np.random.exponential(scale=1 / i, size=i)
-            tmp_count = 0
-            for j in range(i):
-                try:
-                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-                    # change stage
-
-                    url1 = url + sensors[(tmp_count * 10 + j) % 8]
-                    s_time = time.time()
-                    response = post_url(url1, RFID)
-                    t_time = time.time()
-                    rt = t_time - s_time
-                    RFID += 1
-
-                except:
-                    print("error")
-                    error += 1
-
-                time.sleep(1 / i)
-                tmp_count += 1
+            url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+            try:
+                post_url(url, i)
+            except:
+                print("error")
+                error += 1
             timestamp += 1
             event_timestamp_Ccontrol.set()
 
     send_finish = 1
-    final_time = time.time()
-    alltime = final_time - start_time
     store_error_count(error)
-    print('time:: ', alltime)
 
 
 def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event, service_name):
@@ -877,7 +893,7 @@ def test(episodes, event, env):
 
 start_time = time.time()
 
-t1 = threading.Thread(target=send_request, args=(sensors, request_num, start_time, total_episodes, ))
+t1 = threading.Thread(target=send_request, args=(request_num, start_time, total_episodes, ))
 t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
 t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
 t4 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event_mn1, 'app_mn1', ))

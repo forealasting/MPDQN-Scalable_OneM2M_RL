@@ -11,7 +11,7 @@ import datetime
 import math
 from pdqn_v1 import PDQNAgent
 from pdqn_multipass import MultiPassPDQNAgent
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
 print(datetime.datetime.now())
 
 # request rate r
@@ -19,14 +19,14 @@ data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
 
 # Warning !!!need to modify pdqn_v1.py loss_result_dir also
-result_dir = "./mpdqn_result/result6/evaluate7/"
+result_dir = "./mpdqn_result/result7/evaluate/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
 # learning step:   0,  ..., 1,     , 120
 
 simulation_time = 3600  #
-request_n = simulation_time + 90  # for last step
+request_n = simulation_time + 60  # for last step
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -256,11 +256,11 @@ class Env:
         action_replica = action[0]
         action_cpus = action[1][action_replica][0]
         if self.service_name == 'app_mn2':
-            action_replica = 1 # replica  idx
+            action_replica = 2  # replica  idx
             action_cpus = 0.9
 
         self.cpus = round(action_cpus, 2)
-        if ((action_replica + 1) == 1) and (action_cpus == self.cpus):
+        if ((action_replica + 1) == self.replica) and (action_cpus == self.cpus):
             cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
             cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(action_replica + 1) + " " + self.service_name
             returned_text = subprocess.check_output(cmd, shell=True)
@@ -279,7 +279,7 @@ class Env:
 
         event.set()
 
-        time.sleep(85)  # wait for monitor ture value
+        time.sleep(55)  # wait for monitor ture value
 
         response_time_list = []
         # self.cpu_utilization = self.get_cpu_utilization()
@@ -366,7 +366,7 @@ def store_cpu(worker_name):
 # limit-cpu 1
 def reset():
     cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
-    cmd2 = "sudo docker-machine ssh default docker service update --replicas 2 app_mn2 "
+    cmd2 = "sudo docker-machine ssh default docker service update --replicas 3 app_mn2 "
     cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
     cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.9 app_mn2"
     subprocess.check_output(cmd1, shell=True)
@@ -402,8 +402,9 @@ def store_error_count(error):
     f.write(data)
 
 
+def post(url):
+    RFID = random.randint(0, 1000000)
 
-def post_url(url, RFID):
     if error_rate > random.random():
         content = "false"
     else:
@@ -417,15 +418,42 @@ def post_url(url, RFID):
             "rn": str(RFID),
         }
     }
+    url1 = url + sensors[random.randint(0, 7)]
+
+    s_time = time.time()
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=0.05)
+        response = requests.post(url1, headers=headers, json=data)
+
+        rt = time.time() - s_time
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
+        rt = 0.1
 
-    # return response
+    return response, rt
 
-def send_request(sensors, request_num, total_episodes):
+
+def post_url(url, rate):
+
+    with ThreadPoolExecutor(max_workers=rate) as executor:
+        tmp_count = 0
+        results = []
+
+        for i in range(rate):
+            # url1 = url + stage[(timestamp * 10 + tmp_count) % 8]
+            results.append(executor.submit(post, url))
+            time.sleep(1/rate)  # send requests every 1 / rate s
+
+
+        for result in as_completed(results):
+            response, response_time = result.result()
+            # print(type(response.status_code), response_time)
+            if response != "201":
+                print(response)
+
+
+
+def send_request(request_num, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
@@ -443,7 +471,7 @@ def send_request(sensors, request_num, total_episodes):
             # print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp) % 90) == 0 and timestamp!=0 :  # every 60s scaling
+            if ((timestamp) % 60) == 0 and timestamp!=0 :  # every 60s scaling
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
@@ -451,21 +479,12 @@ def send_request(sensors, request_num, total_episodes):
                 print("Start Requesting ...")
             event_timestamp_Ccontrol.clear()
             # exp = np.random.exponential(scale=1 / i, size=i)
-            tmp_count = 0
-            for j in range(i):
-                try:
-                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-                    # change sensor
-                    url1 = url + sensors[(tmp_count * 10 + j) % 8]
-                    post_url(url1, RFID)
-                    RFID += 1  # oneM2M resource name  # Plus 1 for different resource name
-
-                except:
-                    print("error")
-                    error += 1
-                if i <= 50:
-                    time.sleep(1 / i)
-                tmp_count += 1
+            url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+            try:
+                post_url(url, i)
+            except:
+                print("error")
+                error += 1
             timestamp += 1
             event_timestamp_Ccontrol.set()
 
@@ -484,8 +503,8 @@ def pad_action(act, act_param):
 def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
         replay_memory_size, epsilon_steps, tau_actor, tau_actor_param, use_ornstein_noise, learning_rate_actor,
         learning_rate_actor_param, epsilon_final,
-        clip_grad, layers, multipass, action_input_layer, event, service_name, seed):
-    global timestamp, simulation_time
+        clip_grad, layers, multipass, action_input_layer, event, service_name, seed, result_dir):
+    global timestamp
 
     env = Env(service_name)
 
@@ -514,7 +533,8 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                                            'squashing_function': True,
                                            'output_layer_init_std': 0.0001},
                        seed=seed,
-                       service_name=service_name)
+                       service_name=service_name,
+                       result_dir=result_dir)
     # print(agent)
 
     # init_state = [1, 1.0, 0.5, 20]  # replica / cpu utiliation / cpus / response time
@@ -532,7 +552,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
         while True:
             print(timestamp)
-            if timestamp == 85:
+            if timestamp == 55:
                 # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
                 response_time_list = []
@@ -556,7 +576,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 done = False
             event_timestamp_Ccontrol.wait()
 
-            if (((timestamp) % 90) == 0) and (not done) and timestamp!=0:
+            if (((timestamp) % 60) == 0) and (not done) and timestamp!=0:
                 if timestamp == (simulation_time):
                     done = True
                 else:
@@ -592,13 +612,9 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                     break
     if not if_test:
         agent.save_models(result_dir + env.service_name + "_" + str(seed))
-    # end_time = time.time()
-    # print(end_time-start_time)
 
 
-
-
-t1 = threading.Thread(target=send_request, args=(sensors, request_num, total_episodes, ))
+t1 = threading.Thread(target=send_request, args=(request_num, total_episodes, ))
 t2 = threading.Thread(target=store_cpu, args=('worker',))
 t3 = threading.Thread(target=store_cpu, args=('worker1',))
 t4 = threading.Thread(target=mpdqn, args=(total_episodes, batch_size, gamma, initial_memory_threshold,

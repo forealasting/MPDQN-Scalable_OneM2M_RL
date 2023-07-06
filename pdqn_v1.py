@@ -163,7 +163,8 @@ class PDQNAgent:
                  random_weighted=False,
                  device="cuda" if torch.cuda.is_available() else "cpu",
                  seed=None,
-                 service_name='app_mn1'):
+                 service_name='app_mn1',
+                 result_dir="./"):
         # super(PDQNAgent, self).__init__(observation_space, action_space)
         self.observation_space = observation_space
         self.action_space = action_space
