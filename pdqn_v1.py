@@ -284,8 +284,6 @@ class PDQNAgent:
                 Q_a = self.actor.forward(state.unsqueeze(0), all_action_parameters.unsqueeze(0))
                 Q_a = Q_a.detach().cpu().data.numpy()
                 action = np.argmax(Q_a)
-                # # clip action
-                # all_action_parameters = np.clip(all_action_parameters, 0.5, 1.0)
 
                 # scale action from [0, 1] to [0.5, 1]
                 output_min = 0  # sigmoid min
@@ -300,7 +298,8 @@ class PDQNAgent:
             offset = np.array([self.action_parameter_sizes[i] for i in range(action)], dtype=int).sum()
             if self.use_ornstein_noise and self.noise is not None:
                 all_action_parameters[offset:offset + self.action_parameter_sizes[action]] += self.noise.sample()[offset:offset + self.action_parameter_sizes[action]]
-
+            # # clip action
+            # all_action_parameters = np.clip(all_action_parameters, 0.5, 1.0)
             action_parameters = all_action_parameters[offset:offset+self.action_parameter_sizes[action]]
 
 
