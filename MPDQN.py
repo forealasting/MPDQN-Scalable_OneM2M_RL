@@ -96,6 +96,7 @@ if not if_test:
 
     # build dir
     os.mkdir(result_dir)
+
 # store setting
 path = result_dir + "setting.txt"
 
@@ -122,7 +123,6 @@ settings = {
     'w_pref': w_pref,
     'w_res': w_res,
 }
-
 
 # Write settings to file
 with open(result_dir + 'setting.txt', 'a') as f:
@@ -618,12 +618,12 @@ t3 = threading.Thread(target=store_cpu, args=('worker1',))
 t4 = threading.Thread(target=mpdqn, args=(total_episodes, batch_size, gamma, initial_memory_threshold,
         replay_memory_size, epsilon_steps, tau_actor, tau_actor_param, use_ornstein_noise, learning_rate_actor,
         learning_rate_actor_param, epsilon_final,
-        clip_grad, layers, multipass, action_input_layer, event_mn1, 'app_mn1', seed, ))
+        clip_grad, layers, multipass, action_input_layer, event_mn1, 'app_mn1', seed, result_dir, ))
 
 t5 = threading.Thread(target=mpdqn, args=(total_episodes, batch_size, gamma, initial_memory_threshold,
         replay_memory_size, epsilon_steps, tau_actor, tau_actor_param, use_ornstein_noise, learning_rate_actor,
         learning_rate_actor_param, epsilon_final,
-        clip_grad, layers, multipass, action_input_layer, event_mn2, 'app_mn2', seed, ))
+        clip_grad, layers, multipass, action_input_layer, event_mn2, 'app_mn2', seed, result_dir, ))
 
 t1.start()
 t2.start()
