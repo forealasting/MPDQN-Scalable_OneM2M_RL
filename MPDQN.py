@@ -19,14 +19,14 @@ data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
 
 # Warning !!!need to modify pdqn_v1.py loss_result_dir also
-result_dir = "./mpdqn_result/result4/evaluate17/"
+result_dir = "./mpdqn_result/result6/evaluate7/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
 # learning step:   0,  ..., 1,     , 120
 
 simulation_time = 3600  #
-request_n = simulation_time + 60  # for last step
+request_n = simulation_time + 90  # for last step
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -39,18 +39,17 @@ event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
 
 # Need modify ip if ip change
-ip = "192.168.99.124"  # app_mn1
-ip1 = "192.168.99.125"  # app_mn2
+ip = "192.168.99.128"  # app_mn1
+ip1 = "192.168.99.129"  # app_mn2
 
 
 # Parameter
 w_pref = 0.8
 w_res = 0.2
-error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
 Tupper = 50
-
+error_rate = 0.2  # 0.2
 ## Learning parameter
 # S ={k, u , c, r} {k, u , c}
 # k (replica): 1 ~ 3                          actual value : same
@@ -168,8 +167,8 @@ class Env:
         self.replica = 1
         self.cpus = 1
         if self.service_name == 'app_mn2':
-            self.replica = 1
-            self.cpus = 0.85
+            self.replica = 2
+            self.cpus = 1
 
         self.state_space[0] = self.replica
         self.state_space[2] = self.cpus
@@ -257,11 +256,11 @@ class Env:
         action_replica = action[0]
         action_cpus = action[1][action_replica][0]
         if self.service_name == 'app_mn2':
-            action_replica = 0  # replica  = 3
+            action_replica = 1 # replica  idx
             action_cpus = 0.9
 
         self.cpus = round(action_cpus, 2)
-        if ((action_replica + 1) == self.replica) and (action_cpus == self.cpus):
+        if ((action_replica + 1) == 1) and (action_cpus == self.cpus):
             cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
             cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(action_replica + 1) + " " + self.service_name
             returned_text = subprocess.check_output(cmd, shell=True)
@@ -280,7 +279,7 @@ class Env:
 
         event.set()
 
-        time.sleep(55)  # wait for monitor ture value
+        time.sleep(85)  # wait for monitor ture value
 
         response_time_list = []
         # self.cpu_utilization = self.get_cpu_utilization()
@@ -367,9 +366,9 @@ def store_cpu(worker_name):
 # limit-cpu 1
 def reset():
     cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
-    cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
+    cmd2 = "sudo docker-machine ssh default docker service update --replicas 2 app_mn2 "
     cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.85 app_mn2"
+    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.9 app_mn2"
     subprocess.check_output(cmd1, shell=True)
     subprocess.check_output(cmd2, shell=True)
     subprocess.check_output(cmd3, shell=True)
@@ -444,11 +443,12 @@ def send_request(sensors, request_num, total_episodes):
             # print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp) % 60) == 0 and timestamp!=0 :  # every 60s scaling
+            if ((timestamp) % 90) == 0 and timestamp!=0 :  # every 60s scaling
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
                 change = 0
+                print("Start Requesting ...")
             event_timestamp_Ccontrol.clear()
             # exp = np.random.exponential(scale=1 / i, size=i)
             tmp_count = 0
@@ -463,8 +463,8 @@ def send_request(sensors, request_num, total_episodes):
                 except:
                     print("error")
                     error += 1
-
-                time.sleep(1 / i)
+                if i <= 50:
+                    time.sleep(1 / i)
                 tmp_count += 1
             timestamp += 1
             event_timestamp_Ccontrol.set()
@@ -532,7 +532,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
         while True:
             print(timestamp)
-            if timestamp == 55:
+            if timestamp == 85:
                 # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
                 response_time_list = []
@@ -556,7 +556,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 done = False
             event_timestamp_Ccontrol.wait()
 
-            if (((timestamp) % 60) == 0) and (not done) and timestamp!=0:
+            if (((timestamp) % 90) == 0) and (not done) and timestamp!=0:
                 if timestamp == (simulation_time):
                     done = True
                 else:

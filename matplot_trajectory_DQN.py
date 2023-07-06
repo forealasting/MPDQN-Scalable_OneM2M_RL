@@ -21,7 +21,7 @@ if if_evaluation:
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 # tmp_dir = "dqn_result/result1/evaluate/"
 # tmp_dir = "dqn_result/result2/"
-tmp_dir = "threshold_result/result1/"
+tmp_dir = "dqn_result/result2/evaluate2/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -136,8 +136,8 @@ def fig_add_response_times(x, y, y_, service_name):
     else:
         Rmax = Rmax_mn2
 
-    result2 = filter(lambda v: v > Rmax, y_)
-    R = len(list(result2)) / len(y_)
+    result2 = filter(lambda v: v > Rmax, y)
+    R = len(list(result2)) / len(y)
     print("Rmax violation: ", R)
 
     plt.grid(True)
@@ -174,7 +174,7 @@ def fig_add_Resource_use(x, y, y_, service_name, dir):
     plt.show()
 
 def fig_add_reward(x, y, y_, service_name):
-    x = x[:-1]
+    # x = x[:-1]
     plt.figure()
     plt.plot(x, y, color="red", alpha=0.2)  # color=color # label=label
     plt.plot(x, y_, color="red")  # color=color # label=label
@@ -223,12 +223,12 @@ def parse_episods_data(episods_data, service_name):
             response_times.append(parsed_line[1][3])
             reward.append(parsed_line[3])  # cost = -reward
             tmp_step += 1
-            if tmp_step == 60:
+            if (tmp_step == 60) and if_evaluation:
                 step.append(tmp_step)
-                replicas.append(parsed_line[7][0])
-                cpu_utilization.append(parsed_line[7][1] * 100)
-                cpus.append(parsed_line[7][2])
-                response_times.append(parsed_line[7][3])
+                replicas.append(parsed_line[6][0])
+                cpu_utilization.append(parsed_line[6][1] * 100)
+                cpus.append(parsed_line[6][2])
+                response_times.append(parsed_line[6][3])
         # episode_reward.append(sum(reward)/len(reward))
     print(cpu_utilization)
     resource_use = [x * y for x, y in zip(replicas, cpus)]

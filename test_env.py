@@ -9,8 +9,8 @@ import random
 import os
 
 # define result path
-result_dir = "./static_result/0521/request_70/result14/"
-
+# result_dir = "./static_result/0521/request_50/result1/"
+result_dir = "./static_result/result50/"
 # request rate r
 data_rate = 70  # use static request rate
 use_tm = 0  # use dynamic traffic
@@ -19,8 +19,12 @@ error_rate = 0.2   # 0.2
 ## initial
 request_num = []
 simulation_time = 100  # 300 s  # 3600s
-cpus1 = 0.9
-replica1 = 2
+cpus1 = 0.8
+replica1 = 3
+
+
+cpus2 = 1
+replica2 = 1
 
 request_n = simulation_time
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -54,12 +58,14 @@ data += 'use_tm: ' + str(use_tm) + '\n'
 data += 'simulation_time ' + str(simulation_time) + '\n'
 data += 'cpus: ' + str(cpus1) + '\n'
 data += 'replica: ' + str(replica1) + '\n'
+data += 'cpus: ' + str(cpus2) + '\n'
+data += 'replica: ' + str(replica2) + '\n'
 f.write(data)
 f.close()
 
 if use_tm:
     #   Modify the workload path if it is different
-    f = open('request/request6.txt')
+    f = open('request/request14.txt')
 
     for line in f:
         if len(request_num) < request_n:
@@ -94,7 +100,7 @@ def post_url(url, RFID):
     except requests.exceptions.Timeout:
         response = 'timeout'
 
-    return response
+
 
 def store_cpu(worker_name):
     global timestamp, change
@@ -145,7 +151,7 @@ def store_rt2():
         if change == 0:
             f1 = open(path1, 'a')
 
-            RFID1 = random.randint(10000000, 100000000)
+            RFID1 = random.randint(0, 1000000)
 
             headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
             data = {
@@ -186,7 +192,7 @@ def store_rt1():
         if change == 0:
             f1 = open(path1, 'a')
 
-            RFID1 = random.randint(10000000, 100000000)
+            RFID1 = random.randint(0, 1000000)
 
             headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
             data = {
@@ -219,18 +225,29 @@ def store_rt1():
                 break
 
 
+def setting(r1, c1, r2, c2):
+    cmd1 = "sudo docker-machine ssh default docker service update --replicas" + str(replica1) + "app_mn1 "
+    cmd2 = "sudo docker-machine ssh default docker service update --replicas" + str(replica2) + "app_mn2 "
+    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu" + str(cpus1) + "app_mn1"
+    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu" + str(cpus2) + "app_mn2"
+    subprocess.check_output(cmd1, shell=True)
+    subprocess.check_output(cmd2, shell=True)
+    subprocess.check_output(cmd3, shell=True)
+    subprocess.check_output(cmd4, shell=True)
+
 
 def send_request(sensors, request_num):
     global change, send_finish
     global timestamp, use_tm, RFID
-
+    setting(replica1, replica2, cpus1, cpus2)
+    time.sleep(30)
     error = 0
     all_rt = []
     all_timestamp = []
     all_response = []
     tmp_count = 0
-    for i in request_num:  #request_num = [data_rate0, data_rate1 ...]
-        # print("timestamp: ", timestamp)
+    for i in request_num:
+        print(timestamp)
         #exp = np.random.exponential(scale=1 / i, size=i)
 
         for j in range(i):
@@ -239,34 +256,20 @@ def send_request(sensors, request_num):
                 url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
                 url1 = url + sensors[tmp_count % 8]  # just Post to different sensor i
 
-                s_time = time.time()
-                response = post_url(url1, RFID)
-                t_time = time.time()
-                rt = t_time - s_time
-
-                # all_timestamp.append(timestamp)
-                # all_response.append(response)
-                # all_rt.append(rt)
+                post_url(url1, RFID)
 
                 RFID += 1  # For different RFID data
 
             except:
-                rt = 0.05
+
                 error += 1
 
-            # if use_tm == 1: no use now
-            #     time.sleep(exp[tmp_count])
-
-            if rt < (1 / i) and (i > 50) :
-                time.sleep((1 / i) - rt)
-            elif i <= 50 :
-                time.sleep(1 / i)
+            time.sleep(1 / i)
             tmp_count += 1
-
         timestamp += 1
     send_finish = 1
-    store_rt(all_timestamp, all_response, all_rt)
-    print("error: ", error)
+
+
 
 
 

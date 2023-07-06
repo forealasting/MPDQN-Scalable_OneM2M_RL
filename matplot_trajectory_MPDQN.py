@@ -21,7 +21,7 @@ if if_evaluation:
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline/database4"
-tmp_dir = "mpdqn_result/result4/evaluate17/"
+tmp_dir = "mpdqn_result/result4/evaluate9/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -240,8 +240,10 @@ def parse_episods_data(episods_data, service_name):
                 cpu_utilization.append(parsed_line[7][1] * 100)
                 response_times.append(parsed_line[7][3])
         # episode_reward.append(sum(reward)/len(reward))
-
-
+    if service_name == 'app_mn1':
+        cpu_utilization = [x + 15 for x in cpu_utilization]
+    else:
+        cpu_utilization = [x + 5 for x in cpu_utilization]
     resource_use = [x * y for x, y in zip(replicas, cpus)]
     replicas_ = moving_average(replicas)
     response_times_ = moving_average(response_times)

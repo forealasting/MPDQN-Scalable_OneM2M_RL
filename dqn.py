@@ -21,7 +21,7 @@ print(datetime.datetime.now())
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 0 # if use_tm
-result_dir = "./dqn_result/result3/"
+result_dir = "./dqn_result/result1/evaluate2/"
 
 ## initial
 request_num = []
@@ -48,8 +48,8 @@ error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
 Tupper = 50
-w_pref = 0.5
-w_res = 0.5
+w_pref = 0.8
+w_res = 0.2
 ## Learning parameter
 # S ={k, u , c, r}
 # k (replica): 1 ~ 3                          actual value : same
@@ -58,7 +58,7 @@ w_res = 0.5
 # action_space = ['-r', -1, 0, 1, 'r']
 total_episodes = 16       # Total episodes
 
-if_test = False
+if_test = True
 if if_test:
     total_episodes = 1  # Testing_episodes
 

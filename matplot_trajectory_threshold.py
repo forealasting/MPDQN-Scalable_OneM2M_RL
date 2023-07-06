@@ -137,8 +137,8 @@ def fig_add_response_times(x, y, y_, service_name):
     else:
         Rmax = Rmax_mn2
 
-    result2 = filter(lambda v: v > Rmax, y_)
-    R = len(list(result2)) / len(y_)
+    result2 = filter(lambda v: v > Rmax, y)
+    R = len(list(result2)) / len(y)
     print("Rmax violation: ", R)
 
     plt.grid(True)
@@ -224,12 +224,12 @@ def parse_episods_data(episods_data, service_name):
             response_times.append(parsed_line[1][3])
             reward.append(parsed_line[3])  # cost = -reward
             tmp_step += 1
-            # if tmp_step == 60:
-            #     step.append(tmp_step)
-            #     replicas.append(parsed_line[7][0])
-            #     cpu_utilization.append(parsed_line[7][1] * 100)
-            #     cpus.append(parsed_line[7][2])
-            #     response_times.append(parsed_line[7][3])
+            if tmp_step == 60:
+                step.append(tmp_step)
+                replicas.append(parsed_line[6][0])
+                cpu_utilization.append(parsed_line[6][1] * 100)
+                cpus.append(parsed_line[6][2])
+                response_times.append(parsed_line[6][3])
         # episode_reward.append(sum(reward)/len(reward))
     print(cpu_utilization)
     resource_use = [x * y for x, y in zip(replicas, cpus)]
