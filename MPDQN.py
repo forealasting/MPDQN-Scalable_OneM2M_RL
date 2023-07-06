@@ -176,6 +176,13 @@ class Env:
         self.state_space[2] = self.cpus
 
         return self.state_space
+
+        # restart
+        # cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
+        # cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(
+        #     action_replica + 1) + " " + self.service_name
+        # returned_text = subprocess.check_output(cmd, shell=True)
+        # returned_text = subprocess.check_output(cmd1, shell=True)
     def get_response_time(self):
 
         path1 = result_dir + self.service_name + "_response.txt"
@@ -261,21 +268,15 @@ class Env:
             action_replica = 2  # replica  idx
             action_cpus = 0.9
 
+
+        self.replica = action_replica + 1  # 0 1 2 (index)-> 1 2 3 (replica)
         self.cpus = round(action_cpus, 2)
-        if ((action_replica + 1) == self.replica) and (action_cpus == self.cpus):
-            cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
-            cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(action_replica + 1) + " " + self.service_name
-            returned_text = subprocess.check_output(cmd, shell=True)
-            returned_text = subprocess.check_output(cmd1, shell=True)
-        else:
-            self.replica = action_replica + 1  # 0 1 2 (index)-> 1 2 3 (replica)
-            self.cpus = round(action_cpus, 2)
-            # print(self.replica, self.cpus)
-            change = 1
-            cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
-            cmd1 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
-            returned_text = subprocess.check_output(cmd, shell=True)
-            returned_text = subprocess.check_output(cmd1, shell=True)
+        # print(self.replica, self.cpus)
+        change = 1
+        cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
+        cmd1 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
+        returned_text = subprocess.check_output(cmd, shell=True)
+        returned_text = subprocess.check_output(cmd1, shell=True)
 
         time.sleep(30)  # wait service start
 

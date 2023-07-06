@@ -153,11 +153,12 @@ class Env:
                                     "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
     def reset(self):
-        cmd = "sudo docker-machine ssh default docker stack rm app"
-        subprocess.check_output(cmd, shell=True)
-        cmd1 = "sudo docker-machine ssh default docker stack deploy --compose-file docker-compose.yml app"
-        subprocess.check_output(cmd1, shell=True)
-        time.sleep(60)
+        self.replica = 1
+        self.cpus = 1
+        self.state_space[0] = self.replica
+        self.state_space[2] = self.cpus
+
+        return self.state_space
 
     def get_response_time(self):
 
@@ -268,12 +269,6 @@ class Env:
                 change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
-        else:
-            change = 1
-            cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
-            cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(self.replica) + " " + self.service_name
-            returned_text = subprocess.check_output(cmd, shell=True)
-            returned_text = subprocess.check_output(cmd1, shell=True)
 
 
         time.sleep(30)  # wait service start
@@ -820,11 +815,10 @@ def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, e
 def test(episodes, event, env):
     agent = torch.load(result_dir + env.service_name + '.pt')
     print("Model load successfully")
-    init_state = [1, 1.0, 1, 40]
-    init_state = np.array(init_state, dtype=float)
+
     step = 1
     for episode in range(episodes):
-        state = init_state
+        state = env.reset()
         done = False
         while True:
             print(timestamp)
