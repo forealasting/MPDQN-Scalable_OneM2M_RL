@@ -523,7 +523,7 @@ class DQNAgent:
                 if timestamp == 0:
                     done = False
                 event_timestamp_Ccontrol.wait()
-                if (((timestamp) % 60) == 0) and (not done)and timestamp!=0:
+                if (((timestamp) % 60) == 0) and (not done) and timestamp!=0:
                     action = self.select_action(state)
                     if timestamp == (simulation_time):
                         done = True

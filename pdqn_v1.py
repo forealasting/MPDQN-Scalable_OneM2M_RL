@@ -219,6 +219,7 @@ class PDQNAgent:
         self.np_random = None
         self.seed = seed
         self._seed(seed)
+        self.result_dir=result_dir
 
         self.use_ornstein_noise = use_ornstein_noise
         self.noise = OrnsteinUhlenbeckActionNoise(self.action_parameter_size, random_machine=self.np_random, mu=0., theta=0.15, sigma=0.0001) #, theta=0.01, sigma=0.01)
@@ -393,7 +394,7 @@ class PDQNAgent:
 
     def store_actor_loss(self, loss):
         # Write the string to a text file
-        path = loss_result_dir + self.service_name + "_actor_loss.txt"
+        path = self.result_dir + self.service_name + "_actor_loss.txt"
         #path = "actor_loss.txt"
         f = open(path, 'a')
         data = str(loss) + '\n'
@@ -401,7 +402,7 @@ class PDQNAgent:
 
     def store_critic_loss(self, loss):
         # Write the string to a text file
-        path = loss_result_dir + self.service_name + "_critic_loss.txt"
+        path = self.result_dir + self.service_name + "_critic_loss.txt"
         # path = "critic_loss.txt"
         f = open(path, 'a')
         data = str(loss) + '\n'
