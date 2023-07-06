@@ -21,7 +21,7 @@ data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
 
 # Warning !!!need to modify pdqn_v1.py loss_result_dir also
-result_dir = "./mpdqn_result/result7/evaluate/"
+result_dir = "./mpdqn_result/result7/evaluate1/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -88,14 +88,14 @@ seed = 7
 clip_grad = 0 # no use now
 action_input_layer = 0  # no use now
 # cres_norml = False
-if not if_test:
-    # check result directory
-    if os.path.exists(result_dir):
-        print("Deleting existing result directory...")
-        raise SystemExit  # end process
+# if not if_test:
+# check result directory
+if os.path.exists(result_dir):
+    print("Deleting existing result directory...")
+    raise SystemExit  # end process
 
-    # build dir
-    os.mkdir(result_dir)
+# build dir
+os.mkdir(result_dir)
 
 # store setting
 path = result_dir + "setting.txt"
@@ -169,14 +169,13 @@ class Env:
         self.replica = 1
         self.cpus = 1
         if self.service_name == 'app_mn2':
-            self.replica = 2
+            self.replica = 1
             self.cpus = 1
 
         self.state_space[0] = self.replica
         self.state_space[2] = self.cpus
 
         return self.state_space
-
         # restart
         # cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
         # cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(
@@ -265,14 +264,14 @@ class Env:
         action_replica = action[0]
         action_cpus = action[1][action_replica][0]
         if self.service_name == 'app_mn2':
-            action_replica = 2  # replica  idx
-            action_cpus = 0.9
-
+            action_replica = 0  # replica  idx
+            action_cpus = 1
 
         self.replica = action_replica + 1  # 0 1 2 (index)-> 1 2 3 (replica)
         self.cpus = round(action_cpus, 2)
         # print(self.replica, self.cpus)
         change = 1
+
         cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
         cmd1 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
         returned_text = subprocess.check_output(cmd, shell=True)
@@ -369,9 +368,9 @@ def store_cpu(worker_name):
 # limit-cpu 1
 def reset():
     cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
-    cmd2 = "sudo docker-machine ssh default docker service update --replicas 3 app_mn2 "
+    cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
     cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 0.9 app_mn2"
+    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
     subprocess.check_output(cmd1, shell=True)
     subprocess.check_output(cmd2, shell=True)
     subprocess.check_output(cmd3, shell=True)
@@ -540,7 +539,10 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     step = 1
     for episode in range(1, total_episodes+1):
         if if_test:  # Test
-            agent.load_models(result_dir + env.service_name + "_" + str(seed))
+            parts = result_dir.rsplit('/', 2)
+            result_dir_ = parts[0] + '/'
+            print(result_dir_)
+            agent.load_models(result_dir_ + env.service_name + "_" + str(seed))
             agent.epsilon_final = 0.
             agent.epsilon = 0.
             agent.noise = None
