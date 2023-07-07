@@ -17,11 +17,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 print(datetime.datetime.now())
 
 # request rate r
-data_rate = 50      # if not use_tm
-use_tm = 1  # if use_tm
+data_rate = 20      # if not use_tm
+use_tm = 0  # if use_tm
 
 # Warning !!!need to modify pdqn_v1.py loss_result_dir also
-result_dir = "./mpdqn_result/result7/evaluate1/"
+result_dir = "./mpdqn_result/result7/evaluate6/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -88,7 +88,7 @@ seed = 7
 clip_grad = 0 # no use now
 action_input_layer = 0  # no use now
 # cres_norml = False
-# if not if_test:
+
 # check result directory
 if os.path.exists(result_dir):
     print("Deleting existing result directory...")
@@ -166,6 +166,7 @@ class Env:
                                     "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
     def reset(self):
+        # reset replica and cpus values
         self.replica = 1
         self.cpus = 1
         if self.service_name == 'app_mn2':
@@ -176,24 +177,19 @@ class Env:
         self.state_space[2] = self.cpus
 
         return self.state_space
-        # restart
-        # cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
-        # cmd1 = "sudo docker-machine ssh default docker service update --replicas " + str(
-        #     action_replica + 1) + " " + self.service_name
-        # returned_text = subprocess.check_output(cmd, shell=True)
-        # returned_text = subprocess.check_output(cmd1, shell=True)
+
     def get_response_time(self):
 
         path1 = result_dir + self.service_name + "_response.txt"
         f1 = open(path1, 'a')
-        RFID = random.randint(0, 1000000)
+        RFID = random.randint(1000000, 30000000)
         headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
         data = {
             "m2m:cin": {
                 "con": "true",
                 "cnf": "application/json",
                 "lbl": "req",
-                "rn": str(RFID + 1000),
+                "rn": str(RFID),
             }
         }
         # URL
@@ -222,7 +218,7 @@ class Env:
             worker_name = 'worker'
         else:
             worker_name = 'worker1'
-        cmd = "sudo docker-machine ssh " + worker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+        cmd = "sudo docker-machine ssh " + worker_name + " docker stats --no-stream --format \\\"{{ json . }}\\\" "
         returned_text = subprocess.check_output(cmd, shell=True)
         my_data = returned_text.decode('utf8')
         my_data = my_data.split("}")
@@ -272,10 +268,14 @@ class Env:
         # print(self.replica, self.cpus)
         change = 1
 
-        cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
-        cmd1 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
+        # restart
+        cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
         returned_text = subprocess.check_output(cmd, shell=True)
+
+        cmd1 = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
+        cmd2 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
         returned_text = subprocess.check_output(cmd1, shell=True)
+        returned_text = subprocess.check_output(cmd2, shell=True)
 
         time.sleep(30)  # wait service start
 
@@ -364,18 +364,6 @@ def store_cpu(worker_name):
 
 
 # reset Environment
-# replicas = 1
-# limit-cpu 1
-def reset():
-    cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
-    cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
-    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
-    subprocess.check_output(cmd1, shell=True)
-    subprocess.check_output(cmd2, shell=True)
-    subprocess.check_output(cmd3, shell=True)
-    subprocess.check_output(cmd4, shell=True)
-
 
 def store_reward(service_name, reward):
     # Write the string to a text file
@@ -420,16 +408,16 @@ def post(url):
             "rn": str(RFID),
         }
     }
-    url1 = url + sensors[random.randint(0, 6)]
+    url1 = url + sensors[random.randint(0, 7)]
 
     s_time = time.time()
     try:
-        response = requests.post(url1, headers=headers, json=data)
+        response = requests.post(url1, headers=headers, json=data, timeout=0.1)
         rt = time.time() - s_time
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
-        rt = sys.maxsize
+        rt = 0.1
 
     return response, rt
 
@@ -445,10 +433,24 @@ def post_url(url, rate):
 
         for result in as_completed(results):
             response, response_time = result.result()
-            # print(type(response.status_code), response_time)
-            if response != "201":
-                print(response)
+            # # print(type(response.status_code), response_time)
+            # if response != "201":
+            #     print(response)
 
+def reset():
+    cmd_list = [
+        "sudo docker-machine ssh default docker service update --replicas 0 app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas 0 app_mn2",
+        "sudo docker-machine ssh default docker service update --replicas 1 app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas 1 app_mn2",
+        "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1",
+        "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
+    ]
+    def execute_command(cmd):
+        return subprocess.check_output(cmd, shell=True)
+
+    with ThreadPoolExecutor(max_workers=len(cmd_list)) as executor:
+        results = list(executor.map(execute_command, cmd_list))
 
 
 def send_request(request_num, total_episodes):
@@ -541,7 +543,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
         if if_test:  # Test
             parts = result_dir.rsplit('/', 2)
             result_dir_ = parts[0] + '/'
-            print(result_dir_)
+            # print(result_dir_)
             agent.load_models(result_dir_ + env.service_name + "_" + str(seed))
             agent.epsilon_final = 0.
             agent.epsilon = 0.

@@ -16,12 +16,14 @@ from typing import Dict, List, Tuple
 import os
 import datetime
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 print(datetime.datetime.now())
 
 # request rate r
-data_rate = 50      # if not use_tm
+data_rate = 20      # if not use_tm
 use_tm = 0 # if use_tm
-result_dir = "./dqn_result/result1/evaluate2/"
+result_dir = "./dqn_result/result1/evaluate3/"
 
 ## initial
 request_num = []
@@ -80,14 +82,14 @@ torch.manual_seed(seed)
 np.random.seed(seed)
 
 
-if not if_test:
-    # check result directory
-    if os.path.exists(result_dir):
-        print("Deleting existing result directory...")
-        raise SystemExit  # end process
 
-    # build dir
-    os.mkdir(result_dir)
+# check result directory
+if os.path.exists(result_dir):
+    print("Deleting existing result directory...")
+    raise SystemExit  # end process
+
+# build dir
+os.mkdir(result_dir)
 
 # store setting
 
@@ -153,6 +155,7 @@ class Env:
                                     "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
 
     def reset(self):
+        # reset replica and cpus values
         self.replica = 1
         self.cpus = 1
         self.state_space[0] = self.replica
@@ -201,7 +204,7 @@ class Env:
             worker_name = 'worker'
         else:
             worker_name = 'worker1'
-        cmd = "sudo docker-machine ssh " + worker_name + " docker stats --all --no-stream --format \\\"{{ json . }}\\\" "
+        cmd = "sudo docker-machine ssh " + worker_name + " docker stats --no-stream --format \\\"{{ json . }}\\\" "
         returned_text = subprocess.check_output(cmd, shell=True)
         my_data = returned_text.decode('utf8')
         my_data = my_data.split("}")
@@ -239,11 +242,14 @@ class Env:
     def step(self, action_index, event, done):
         global timestamp, send_finish, change, simulation_time
 
+        change = 1
+        # restart
+        cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
+        returned_text = subprocess.check_output(cmd, shell=True)
         action = self.action_space[action_index]
         if action == '-r':
             if self.replica > 1:
                 self.replica -= 1
-                change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
 
@@ -251,7 +257,6 @@ class Env:
             if self.cpus >= 0.5:
                 self.cpus -= 0.1
                 self.cpus = round(self.cpus, 1)  # Prevent python Output float error : 0.8 -  0.1   Output:  0.7999999999999999
-                change = 1
                 cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
                 returned_text = subprocess.check_output(cmd, shell=True)
 
@@ -259,17 +264,17 @@ class Env:
             if self.cpus < 1:
                 self.cpus += 0.1
                 self.cpus = round(self.cpus, 1)
-                change = 1
                 cmd = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
                 returned_text = subprocess.check_output(cmd, shell=True)
 
         if action == 'r':
             if self.replica < 3:
                 self.replica += 1
-                change = 1
                 cmd = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
                 returned_text = subprocess.check_output(cmd, shell=True)
-
+        else:
+            cmd = "sudo docker-machine ssh default docker service update --replicas " + str(self.replica) + " " + self.service_name
+            returned_text = subprocess.check_output(cmd, shell=True)
 
         time.sleep(30)  # wait service start
 
@@ -486,13 +491,9 @@ class DQNAgent:
         self.is_test = False
         update_cnt = 0
         epsilons = []
-        init_state = [1, 1.0, 0.5, 40]
-        init_state = np.array(init_state, dtype=float)
         step = 1
-        # if if_test:
-        #     self.dqn.load_state_dict(torch.load(result_dir + self.env.service_name + '.pt'))
         for episode in range(episodes):
-            state = init_state
+            state = state = self.env.reset()
             done = False
             losses = []
             while True:
@@ -511,7 +512,7 @@ class DQNAgent:
             state = np.array(state, dtype=np.float32)
 
             event_timestamp_Ccontrol.wait()
-            print("service name:", self.env.service_name, " episode:", episode)
+            print("service name:", self.env.service_name, " episode:", episode+1)  #
             while True:
 
 
@@ -634,7 +635,7 @@ class DQNAgent:
         """Hard update: target <- local."""
         self.dqn_target.load_state_dict(self.dqn.state_dict())
 
-def store_cpu(start_time, worker_name):
+def store_cpu(worker_name):
     global timestamp, cpus, change, reset_complete
 
     cmd = "sudo docker-machine ssh " + worker_name + " docker stats --no-stream --format \\\"{{ json . }}\\\" "
@@ -660,18 +661,6 @@ def store_cpu(start_time, worker_name):
                     data = data + str(cpu) + ' ' + '\n'
                     f.write(data)
                     f.close()
-
-
-# reset Environment
-def reset():
-    cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
-    cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
-    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
-    subprocess.check_output(cmd1, shell=True)
-    subprocess.check_output(cmd2, shell=True)
-    subprocess.check_output(cmd3, shell=True)
-    subprocess.check_output(cmd4, shell=True)
 
 
 def store_reward(service_name, reward):
@@ -723,43 +712,50 @@ def post(url):
             "rn": str(RFID),
         }
     }
-    url1 = url + sensors[random.randint(0, 6)]
+    url1 = url + sensors[random.randint(0, 7)]
 
     s_time = time.time()
     try:
-        response = requests.post(url1, headers=headers, json=data)
+        response = requests.post(url1, headers=headers, json=data, timeout=0.1)
         rt = time.time() - s_time
         response = str(response.status_code)
     except requests.exceptions.Timeout:
         response = "timeout"
+        rt = 0.1
 
-    return response
-
-
-def post_url(url, RFID):
-
-    if error_rate > random.random():
-        content = "false"
-    else:
-        content = "true"
-    headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
-    data = {
-        "m2m:cin": {
-            "con": content,
-            "cnf": "application/json",
-            "lbl": "req",
-            "rn": str(RFID),
-        }
-    }
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        response = str(response.status_code)
-    except requests.exceptions.Timeout:
-        response = "timeout"
-
-    # return response
+    return response, rt
 
 
+def post_url(url, rate):
+
+    with ThreadPoolExecutor(max_workers=rate) as executor:
+
+        results = []
+        for i in range(rate):
+            results.append(executor.submit(post, url))
+            time.sleep(1/rate)  # send requests every 1 / rate s
+
+        for result in as_completed(results):
+            response, response_time = result.result()
+            # print(type(response.status_code), response_time)
+            # if response != "201":
+            #     print(response)
+
+# reset Environment
+def reset():
+    cmd_list = [
+        "sudo docker-machine ssh default docker service update --replicas 0 app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas 0 app_mn2",
+        "sudo docker-machine ssh default docker service update --replicas 1 app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas 1 app_mn2",
+        "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1",
+        "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
+    ]
+    def execute_command(cmd):
+        return subprocess.check_output(cmd, shell=True)
+
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(execute_command, cmd_list))
 
 
 def send_request(request_num, total_episodes):
@@ -813,7 +809,10 @@ def dqn(total_episodes, memory_size, batch_size, target_update, epsilon_decay, e
         test(total_episodes, event, env)
 
 def test(episodes, event, env):
-    agent = torch.load(result_dir + env.service_name + '.pt')
+    parts = result_dir.rsplit('/', 2)
+    result_dir_ = parts[0] + '/'
+    # print(result_dir_)
+    agent = torch.load(result_dir_ + env.service_name + '.pt')
     print("Model load successfully")
 
     step = 1
@@ -887,9 +886,9 @@ def test(episodes, event, env):
 
 start_time = time.time()
 
-t1 = threading.Thread(target=send_request, args=(request_num, start_time, total_episodes, ))
-t2 = threading.Thread(target=store_cpu, args=(start_time, 'worker',))
-t3 = threading.Thread(target=store_cpu, args=(start_time, 'worker1',))
+t1 = threading.Thread(target=send_request, args=(request_num, total_episodes, ))
+t2 = threading.Thread(target=store_cpu, args=('worker',))
+t3 = threading.Thread(target=store_cpu, args=('worker1',))
 t4 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event_mn1, 'app_mn1', ))
 t5 = threading.Thread(target=dqn, args=(total_episodes, memory_size, batch_size, target_update, epsilon_decay, event_mn2, 'app_mn2', ))
 

@@ -7,6 +7,7 @@ import json
 import numpy as np
 import random
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # define result path
 # result_dir = "./static_result/0521/request_50/result1/"
@@ -21,7 +22,6 @@ request_num = []
 simulation_time = 100  # 300 s  # 3600s
 cpus1 = 0.8
 replica1 = 3
-
 
 cpus2 = 1
 replica2 = 1
@@ -225,52 +225,84 @@ def store_rt1():
                 break
 
 
-def setting(r1, c1, r2, c2):
-    cmd1 = "sudo docker-machine ssh default docker service update --replicas" + str(replica1) + "app_mn1 "
-    cmd2 = "sudo docker-machine ssh default docker service update --replicas" + str(replica2) + "app_mn2 "
-    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu" + str(cpus1) + "app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu" + str(cpus2) + "app_mn2"
-    subprocess.check_output(cmd1, shell=True)
-    subprocess.check_output(cmd2, shell=True)
-    subprocess.check_output(cmd3, shell=True)
-    subprocess.check_output(cmd4, shell=True)
+def post(url):
+    RFID = random.randint(0, 1000000)
+
+    if error_rate > random.random():
+        content = "false"
+    else:
+        content = "true"
+    headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
+    data = {
+        "m2m:cin": {
+            "con": content,
+            "cnf": "application/json",
+            "lbl": "req",
+            "rn": str(RFID),
+        }
+    }
+    url1 = url + sensors[random.randint(0, 7)]
+
+    s_time = time.time()
+    try:
+        response = requests.post(url1, headers=headers, json=data, timeout=0.1)
+        rt = time.time() - s_time
+        response = str(response.status_code)
+    except requests.exceptions.Timeout:
+        response = "timeout"
+        rt = 0.1
+
+    return response, rt
 
 
+def post_url(url, rate):
+
+    with ThreadPoolExecutor(max_workers=rate) as executor:
+
+        results = []
+        for i in range(rate):
+            results.append(executor.submit(post, url))
+            time.sleep(1/rate)  # send requests every 1 / rate s
+
+        for result in as_completed(results):
+            response, response_time = result.result()
+            # # print(type(response.status_code), response_time)
+            # if response != "201":
+            #     print(response)
+
+def reset():
+    cmd_list = [
+        "sudo docker-machine ssh default docker service update --replicas 0 app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas 0 app_mn2",
+        "sudo docker-machine ssh default docker service update --replicas 1 app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas 1 app_mn2",
+        "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1",
+        "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
+    ]
+    def execute_command(cmd):
+        return subprocess.check_output(cmd, shell=True)
+
+    with ThreadPoolExecutor(max_workers=len(cmd_list)) as executor:
+        results = list(executor.map(execute_command, cmd_list))
 def send_request(sensors, request_num):
     global change, send_finish
     global timestamp, use_tm, RFID
-    setting(replica1, replica2, cpus1, cpus2)
-    time.sleep(30)
+    reset()
+    time.sleep(70)
     error = 0
-    all_rt = []
-    all_timestamp = []
-    all_response = []
-    tmp_count = 0
+
     for i in request_num:
-        print(timestamp)
+        #print(timestamp)
         #exp = np.random.exponential(scale=1 / i, size=i)
+        url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+        try:
+            post_url(url, i)
+        except:
+            print("error")
+            error += 1
 
-        for j in range(i):
-            try:
-                # change sensors
-                url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-                url1 = url + sensors[tmp_count % 8]  # just Post to different sensor i
-
-                post_url(url1, RFID)
-
-                RFID += 1  # For different RFID data
-
-            except:
-
-                error += 1
-
-            time.sleep(1 / i)
-            tmp_count += 1
         timestamp += 1
     send_finish = 1
-
-
-
 
 
 t1 = threading.Thread(target=send_request, args=(sensors, request_num, ))
