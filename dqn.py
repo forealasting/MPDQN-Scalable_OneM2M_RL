@@ -17,8 +17,11 @@ import os
 import datetime
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 print(datetime.datetime.now())
+
+# Need modify ip if ip change
+ip = "192.168.99.128"  # app_mn1
+ip1 = "192.168.99.129"  # app_mn2
 
 # request rate r
 data_rate = 20      # if not use_tm
@@ -45,9 +48,6 @@ event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
 
-# Need modify ip if ip change
-ip = "192.168.99.128"  # app_mn1
-ip1 = "192.168.99.129"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20

@@ -16,20 +16,33 @@ from pdqn_multipass import MultiPassPDQNAgent
 from concurrent.futures import ThreadPoolExecutor, as_completed
 print(datetime.datetime.now())
 
-# request rate r
-data_rate = 30      # if not use_tm
-use_tm = 0          # if use_tm
-tm_path = 'request/request14.txt'
+# Need modify ip if ip change
+# check cmd : sudo docker-machine ls
+ip = "192.168.99.128"  # app_mn1
+ip1 = "192.168.99.129"  # app_mn2
 
-#
-result_dir = "./mpdqn_result/result7/evaluate7/"
+
+# request rate r
+data_rate = 50      # if not use_tm
+use_tm = 0          # if use_tm
+tm_path = 'request/request14.txt'  # traffic path
+result_dir = "./mpdqn_result/result7/evaluate12/"
+
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
 # learning step:   0,  ..., 1,     , 120
 
+monitor_period = 60
 simulation_time = 3600  #
-request_n = simulation_time + 60  # for last step
+request_n = simulation_time + monitor_period  # for last step
+# initial mn1 replica , initial mn2 replica, initial mn1 cpus, initial mn2 cpus
+ini_replica1, ini_replica2, ini_cpus1, ini_cpus2 = 1, 1, 1, 1
+
+
+## manual action for evaluation
+## if training : Need modify manual_action to 0
+manual_action = 1
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -40,10 +53,6 @@ RFID = 0  # oneM2M resource name  (Need different)
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
-
-# Need modify ip if ip change
-ip = "192.168.99.128"  # app_mn1
-ip1 = "192.168.99.129"  # app_mn2
 
 
 # Parameter
@@ -73,11 +82,12 @@ epsilon_initial = 1   #
 epsilon_final = 0.01  # 0.01
 
 # Learning rate
+learning_rate_actor_param = 0.001
+learning_rate_actor = 0.01
+# Target Learning rate
 tau_actor_param = 0.01
 tau_actor = 0.1 # 0.1
 
-learning_rate_actor_param = 0.001
-learning_rate_actor = 0.01
 gamma = 0.9                 # Discounting rate
 replay_memory_size = 960  # Replay memory
 batch_size = 16
@@ -161,7 +171,7 @@ class Env:
         self.n_state = len(self.state_space)
         self.n_actions = len(self.action_space)
 
-        # Need modify ip if container name change
+        # four service url
         self.url_list = ["http://" + ip + ":666/~/mn-cse/mn-name/AE1/RFID_Container_for_stage4",
                                     "http://" + ip1 + ":777/~/mn-cse/mn-name/AE2/Control_Command_Container",
                                     "http://" + ip + ":1111/test", "http://" + ip1 + ":2222/test"]
@@ -170,9 +180,9 @@ class Env:
         # reset replica and cpus values
         self.replica = 1
         self.cpus = 1
-        if self.service_name == 'app_mn2':
-            self.replica = 1
-            self.cpus = 1
+        # if self.service_name == 'app_mn2':
+        #     self.replica = 1
+        #     self.cpus = 1
 
         self.state_space[0] = self.replica
         self.state_space[2] = self.cpus
@@ -244,7 +254,7 @@ class Env:
                 s = line.split(' ')
                 time.append(float(s[0]))
                 cpu.append(float(s[1]))
-
+            # Get last five data
             last_avg_cpu = statistics.mean(cpu[-5:])
             f.close()
         except:
@@ -255,12 +265,15 @@ class Env:
         return int(round(value / 10))
 
     def step(self, action, event, done):
-        global timestamp, send_finish, change, simulation_time
-
+        global timestamp, send_finish, change
 
         action_replica = action[0]
         action_cpus = action[1][action_replica][0]
-        if self.service_name == 'app_mn2':
+        # manual_action
+        if self.service_name == 'app_mn2' and manual_action:
+            action_replica = 0  # replica  idx
+            action_cpus = 1
+        if self.service_name == 'app_mn1' and manual_action:
             action_replica = 0  # replica  idx
             action_cpus = 1
 
@@ -272,7 +285,7 @@ class Env:
         # restart
         cmd = "sudo docker-machine ssh default docker service update --replicas 0 " + self.service_name
         returned_text = subprocess.check_output(cmd, shell=True)
-
+        # do agent action
         cmd1 = "sudo docker-machine ssh default docker service scale " + self.service_name + "=" + str(self.replica)
         cmd2 = "sudo docker-machine ssh default docker service update --limit-cpu " + str(self.cpus) + " " + self.service_name
         returned_text = subprocess.check_output(cmd1, shell=True)
@@ -282,7 +295,7 @@ class Env:
 
         event.set()
 
-        time.sleep(55)  # wait for monitor ture value
+        time.sleep(monitor_period-5)  # wait for monitor ture value
 
         response_time_list = []
         # self.cpu_utilization = self.get_cpu_utilization()
@@ -434,7 +447,8 @@ def post_url(url, rate):
             # if response != "201":
             #     print(response)
 
-def reset():
+def reset(r1, r2, c1, c2):
+    print("reset envronment...")
     cmd_list = [
         "sudo docker-machine ssh default docker service update --replicas 0 app_mn1",
         "sudo docker-machine ssh default docker service update --replicas 0 app_mn2",
@@ -447,7 +461,7 @@ def reset():
         return subprocess.check_output(cmd, shell=True)
     for cmd in cmd_list:
         result = execute_command(cmd)
-        print(result)
+        # print(result)
 
 def send_request(request_num, total_episodes):
     global change, send_finish, reset_complete
@@ -458,7 +472,7 @@ def send_request(request_num, total_episodes):
         print("episode: ", episode+1)
         print("reset envronment")
         reset_complete = 0
-        reset()  # reset Environment
+        reset(ini_replica1, ini_replica2, ini_cpus1, ini_cpus2)  # reset Environment
         time.sleep(70)
         print("reset envronment complete")
         reset_complete = 1
@@ -467,7 +481,7 @@ def send_request(request_num, total_episodes):
             # print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp) % 60) == 0 and timestamp!=0 :  # every 60s scaling
+            if ((timestamp) % monitor_period) == 0 and timestamp!=0 :  # every 60s scaling
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
@@ -502,7 +516,6 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
     global timestamp
 
     env = Env(service_name)
-
 
     agent_class = PDQNAgent
     if multipass:
@@ -550,7 +563,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
 
         while True:
             print(timestamp)
-            if timestamp == 55:
+            if timestamp == (monitor_period-5):
                 # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
                 response_time_list = []
@@ -574,7 +587,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                 done = False
             event_timestamp_Ccontrol.wait()
 
-            if (((timestamp) % 60) == 0) and (not done) and timestamp!=0:
+            if (((timestamp) % monitor_period) == 0) and (not done) and timestamp!=0:
                 if timestamp == (simulation_time):
                     done = True
                 else:
