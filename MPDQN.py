@@ -17,11 +17,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 print(datetime.datetime.now())
 
 # request rate r
-data_rate = 20      # if not use_tm
-use_tm = 0  # if use_tm
+data_rate = 30      # if not use_tm
+use_tm = 0          # if use_tm
+tm_path = 'request/request14.txt'
 
-# Warning !!!need to modify pdqn_v1.py loss_result_dir also
-result_dir = "./mpdqn_result/result7/evaluate6/"
+#
+result_dir = "./mpdqn_result/result7/evaluate7/"
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -135,7 +136,7 @@ sensors = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Lev
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request14.txt')
+    f = open(tm_path)
 
     for line in f:
         if len(request_num) < request_n:
@@ -332,8 +333,6 @@ class Env:
         reward = -(reward_perf + reward_res)
         return next_state, reward, reward_perf, reward_res
 
-
-
 def store_cpu(worker_name):
     global timestamp, cpus, change, reset_complete
 
@@ -373,7 +372,6 @@ def store_reward(service_name, reward):
     f.write(data)
 
 
-
 def store_trajectory(service_name, step, s, a_r, a_c, r, r_perf, r_res, s_, done, if_epsilon):
     path = result_dir + service_name + "_trajectory.txt"
     tmp_s = list(s)
@@ -382,7 +380,6 @@ def store_trajectory(service_name, step, s, a_r, a_c, r, r_perf, r_res, s_, done
     f = open(path, 'a')
     data = str(step) + ' ' + str(tmp_s) + ' ' + str(a_r) + ' ' + str(a_c_) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + ' ' + str(if_epsilon) + '\n'
     f.write(data)
-
 
 def store_error_count(error):
     # Write the string to a text file
@@ -448,10 +445,9 @@ def reset():
     ]
     def execute_command(cmd):
         return subprocess.check_output(cmd, shell=True)
-
-    with ThreadPoolExecutor(max_workers=len(cmd_list)) as executor:
-        results = list(executor.map(execute_command, cmd_list))
-
+    for cmd in cmd_list:
+        result = execute_command(cmd)
+        print(result)
 
 def send_request(request_num, total_episodes):
     global change, send_finish, reset_complete
@@ -489,7 +485,6 @@ def send_request(request_num, total_episodes):
             event_timestamp_Ccontrol.set()
 
     send_finish = 1
-
     store_error_count(error)
 
 

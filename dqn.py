@@ -22,8 +22,10 @@ print(datetime.datetime.now())
 
 # request rate r
 data_rate = 20      # if not use_tm
-use_tm = 0 # if use_tm
-result_dir = "./dqn_result/result1/evaluate3/"
+
+use_tm = 0          # if use_tm
+tm_path = 'request/request14.txt'
+result_dir = "./dqn_result/result1/evaluate4/"
 
 ## initial
 request_num = []
@@ -44,14 +46,16 @@ event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
 
 # Need modify ip if ip change
-ip = "192.168.99.124"  # app_mn1
-ip1 = "192.168.99.125"  # app_mn2
+ip = "192.168.99.128"  # app_mn1
+ip1 = "192.168.99.129"  # app_mn2
 error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
 Tupper = 50
+# cost weight -------------------
 w_pref = 0.8
 w_res = 0.2
+#  -------------------------------
 ## Learning parameter
 # S ={k, u , c, r}
 # k (replica): 1 ~ 3                          actual value : same
@@ -123,7 +127,7 @@ sensors = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Lev
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request14.txt')
+    f = open(tm_path)
 
     for line in f:
         if len(request_num) < request_n:
@@ -753,9 +757,9 @@ def reset():
     ]
     def execute_command(cmd):
         return subprocess.check_output(cmd, shell=True)
+    for cmd in cmd_list:
+        execute_command(cmd)
 
-    with ThreadPoolExecutor() as executor:
-        results = list(executor.map(execute_command, cmd_list))
 
 
 def send_request(request_num, total_episodes):
@@ -835,6 +839,7 @@ def test(episodes, event, env):
         state = np.array(state, dtype=np.float32)
 
         event_timestamp_Ccontrol.wait()
+        print("service name:", env.service_name, "initial state:", state)
         print("service name:", env.service_name, " episode:", episode)
         while True:
 
