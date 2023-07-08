@@ -23,10 +23,10 @@ ip1 = "192.168.99.129"  # app_mn2
 
 
 # request rate r
-data_rate = 50      # if not use_tm
+data_rate = 40      # if not use_tm
 use_tm = 0          # if use_tm
 tm_path = 'request/request14.txt'  # traffic path
-result_dir = "./mpdqn_result/result7/evaluate12/"
+result_dir = "./mpdqn_result/result8/evaluate2/"
 
 ## initial
 request_num = []
@@ -323,9 +323,15 @@ class Env:
         #     c_perf = math.exp(tmp_d)
 
         # Cost 2
-        B = 10
-        target = t_max + 2 * math.log(0.9)
-        c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max), 0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
+        # B = 10
+        # target = t_max + 2 * math.log(0.9)
+        # c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max), 0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
+
+        # Cost 3
+        #
+        B = 0.27
+        c_perf = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / 20) - 0.5)
+
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
@@ -452,10 +458,10 @@ def reset(r1, r2, c1, c2):
     cmd_list = [
         "sudo docker-machine ssh default docker service update --replicas 0 app_mn1",
         "sudo docker-machine ssh default docker service update --replicas 0 app_mn2",
-        "sudo docker-machine ssh default docker service update --replicas 1 app_mn1",
-        "sudo docker-machine ssh default docker service update --replicas 1 app_mn2",
-        "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1",
-        "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
+        "sudo docker-machine ssh default docker service update --replicas " + str(r1) + " app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas " + str(r2) + " app_mn2",
+        "sudo docker-machine ssh default docker service update --limit-cpu " + str(c1) + " app_mn1",
+        "sudo docker-machine ssh default docker service update --limit-cpu " + str(c2) + " app_mn2"
     ]
     def execute_command(cmd):
         return subprocess.check_output(cmd, shell=True)

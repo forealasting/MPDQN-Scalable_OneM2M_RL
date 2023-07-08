@@ -21,7 +21,7 @@ if if_evaluation:
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline/database4"
-tmp_dir = "mpdqn_result/result7/evaluate2/"
+tmp_dir = "mpdqn_result/result7/evaluate13/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -86,7 +86,7 @@ def fig_add_Cpus(x, y, service_name):
     #　plt.xlabel("step")
     plt.xlabel("step")
     plt.ylabel("Cpus")
-    plt.grid(True)
+    # plt.grid(True)
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 1.1)
@@ -101,7 +101,7 @@ def fig_add_Replicas(x, y, service_name):
     plt.title(service_name)
     plt.xlabel("step")
     plt.ylabel("Replicas")
-    plt.grid(True)
+    # plt.grid(True)
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 4)
@@ -119,9 +119,9 @@ def fig_add_Cpu_utilization(x, y, y_, service_name):
     plt.title(service_name)
     plt.xlabel("step")
     plt.ylabel("Cpu_utilization")
-    plt.grid(True)
+    # plt.grid(True)
     plt.xlim(0, total_episodes*step_per_episodes)
-    plt.ylim(0, 100)
+    plt.ylim(0, 110)
     plt.savefig(tmp_dir + service_name + "_Cpu_utilization.png", dpi=300)
     plt.tight_layout()
     plt.show()
@@ -148,7 +148,7 @@ def fig_add_response_times(x, y, y_, service_name):
     R = len(list(result2)) / len(y)
     print("Rmax violation: ", R)
 
-    plt.grid(True)
+    # plt.grid(True)
     plt.axhline(y=Rmax_mn1, color='r', linestyle='--')
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 100)
@@ -174,7 +174,7 @@ def fig_add_Resource_use(x, y, y_, service_name, dir):
     plt.title(service_name + " Avg : " + str(avg))
     plt.xlabel("step")
     plt.ylabel("Resource_use")
-    plt.grid(True)
+    # plt.grid(True)
     plt.xlim(0, len(y))
     plt.ylim(0, 3)
     plt.savefig(dir + service_name + "_Resource_use.png", dpi=300)
@@ -192,7 +192,7 @@ def fig_add_reward(x, y, y_, service_name):
     plt.xlabel("step")
     plt.ylabel("Reward")
 
-    plt.grid(True)
+    # plt.grid(True)
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(-0.6, 0)
@@ -322,7 +322,7 @@ for p in path_list:
 #         plt.title(service[tmp] + " Avg : " + str(avg))
 #         plt.xlabel("step")
 #         plt.ylabel("Response")
-#         plt.grid(True)
+#         # plt.grid(True)
 #         plt.xlim(0, total_episodes*60)
 #         plt.axhline(y=Rmax, color='r', linestyle='--')
 #         plt.ylim(0, 100)
