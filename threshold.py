@@ -97,7 +97,7 @@ with open(result_dir + 'setting.txt', 'a') as f:
 
 
 ## 8 stage
-stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
+sensors = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level_Container", "RFID_Container_for_stage2",
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
@@ -497,7 +497,7 @@ def agent_threshold(event, service_name):
 
 
 
-t1 = threading.Thread(target=send_request, args=(stage, request_num, ))
+t1 = threading.Thread(target=send_request, args=(request_num, total_episodes, ))
 t2 = threading.Thread(target=store_cpu, args=('worker',))
 t3 = threading.Thread(target=store_cpu, args=('worker1',))
 t4 = threading.Thread(target=agent_threshold, args=(event_mn1, 'app_mn1', ))
