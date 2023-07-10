@@ -60,7 +60,7 @@ w_pref = 0.5   # 0.8
 w_res = 0.5    # 0.2
 Tmax_mn1 = 20
 Tmax_mn2 = 20
-Tupper = 50
+T_upper = 50
 error_rate = 0.2  # 0.2
 ## Learning parameter
 # S ={k, u , c, r} {k, u , c}
@@ -330,8 +330,8 @@ class Env:
 
         # Cost 3
         #
-        B = 0.27
-        c_perf = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / 20) - 0.5)
+        B = np.log(1+0.5)/((T_upper-t_max)/t_max)
+        c_perf = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / t_max) - 0.5)
 
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax

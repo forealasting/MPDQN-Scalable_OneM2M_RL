@@ -8,7 +8,8 @@ import random
 import os
 import math
 import statistics
-import  datetime
+import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 print(datetime.datetime.now())
 
@@ -53,7 +54,7 @@ w_res = 0.2
 error_rate = 0.2  # 0.2/0.5
 Tmax_mn1 = 20
 Tmax_mn2 = 20
-Tupper = 50
+T_upper = 50
 
 ## Learning parameter
 # S ={k, u , c, r} {k, u , c}
@@ -270,9 +271,13 @@ class Env:
         #     c_perf = math.exp(tmp_d)
 
         # Cost 2
-        B = 10
-        target = t_max + 2 * math.log(0.9)
-        c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max), 0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
+        # B = 10
+        # target = t_max + 2 * math.log(0.9)
+        # c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max), 0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
+        # Cost 3
+        #
+        B = np.log(1+0.5)/((T_upper-t_max)/t_max)
+        c_perf = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / t_max) - 0.5)
 
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
@@ -293,29 +298,6 @@ class Env:
         reward_res = w_res * c_res
         reward = -(reward_perf + reward_res)
         return next_state, reward, reward_perf, reward_res
-
-
-
-def post_url(url, RFID):
-
-    if error_rate > random.random():
-        content = "false"
-    else:
-        content = "true"
-    headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
-    data = {
-        "m2m:cin": {
-            "con": content,
-            "cnf": "application/json",
-            "lbl": "req",
-            "rn": str(RFID),
-        }
-    }
-    try:
-        response = requests.post(url, headers=headers, json=data, timeout=0.05)
-        response = str(response.status_code)
-    except requests.exceptions.Timeout:
-        response = 'timeout'
 
 
 def store_cpu(woker_name):
@@ -361,6 +343,52 @@ def store_trajectory(service_name, step, s, a, r, r_perf, r_res, s_, done):
     data = str(step) + ' ' + str(tmp_s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
     f.write(data)
 
+def post(url):
+    RFID = random.randint(0, 1000000)
+
+    if error_rate > random.random():
+        content = "false"
+    else:
+        content = "true"
+    headers = {"X-M2M-Origin": "admin:admin", "Content-Type": "application/json;ty=4"}
+    data = {
+        "m2m:cin": {
+            "con": content,
+            "cnf": "application/json",
+            "lbl": "req",
+            "rn": str(RFID),
+        }
+    }
+    url1 = url + sensors[random.randint(0, 7)]
+
+    s_time = time.time()
+    try:
+        response = requests.post(url1, headers=headers, json=data, timeout=0.1)
+        rt = time.time() - s_time
+        response = str(response.status_code)
+    except requests.exceptions.Timeout:
+        response = "timeout"
+        rt = 0.1
+
+    return response, rt
+
+
+def post_url(url, rate):
+
+    with ThreadPoolExecutor(max_workers=rate) as executor:
+
+        results = []
+        for i in range(rate):
+            results.append(executor.submit(post, url))
+            time.sleep(1/rate)  # send requests every 1 / rate s
+
+        for result in as_completed(results):
+            response, response_time = result.result()
+            # # print(type(response.status_code), response_time)
+            # if response != "201":
+            #     print(response)
+
+
 def reset(r1, c1, r2, c2):
     print("reset envronment...")
     cmd_list = [
@@ -377,13 +405,13 @@ def reset(r1, c1, r2, c2):
         result = execute_command(cmd)
         print(result)
 
-def send_request(stage, request_num):
+def send_request(request_num, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
     error = 0
     for episode in range(total_episodes):
         timestamp = 0
-        print("episode: ", episode + 1)
+        print("episode: ", episode+1)
         print("reset envronment")
         reset_complete = 0
         reset(ini_replica1, ini_cpus1,  ini_replica2, ini_cpus2)  # reset Environment
@@ -395,35 +423,25 @@ def send_request(stage, request_num):
             # print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp) % monitor_period) == 0 and timestamp != 0:  # and timestamp<(simulation_time)
+            if ((timestamp) % monitor_period) == 0 and timestamp!=0 :  # every 60s scaling
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
                 change = 0
+                print("Start Requesting ...")
             event_timestamp_control.clear()
             # exp = np.random.exponential(scale=1 / i, size=i)
-            tmp_count = 0
-            for j in range(i):
-                try:
-                    url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
-                    # change stage
-                    url1 = url + stage[(tmp_count * 10 + j) % 8]
-                    post_url(url1, RFID)
-                    RFID += 1
-
-                except:
-                    print("error")
-                    error += 1
-
-                time.sleep(1 / i)
-                tmp_count += 1
+            url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
+            try:
+                post_url(url, i)
+            except:
+                print("error")
+                error += 1
             timestamp += 1
             event_timestamp_control.set()
 
     send_finish = 1
-
     store_error_count(error)
-
 
 def agent_threshold(event, service_name):
     global T_max, change, send_finish, replica1, cpus1
