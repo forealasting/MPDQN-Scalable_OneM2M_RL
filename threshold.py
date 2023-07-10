@@ -24,6 +24,8 @@ use_tm = 1  # if use_tm
 
 # result path
 result_dir = "./threshold_result/result2/"
+tm_path = 'request/request20.txt'  # traffic path
+
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
@@ -62,6 +64,8 @@ Tupper = 50
 total_episodes = 1
 
 seed = 7
+np.random.seed(seed)
+
 # check result directory
 if os.path.exists(result_dir):
     print("Deleting existing result directory...")
@@ -96,7 +100,7 @@ stage = ["RFID_Container_for_stage0", "RFID_Container_for_stage1", "Liquid_Level
          "Color_Container", "RFID_Container_for_stage3", "Contrast_Data_Container", "RFID_Container_for_stage4"]
 
 if use_tm:
-    f = open('request/request14.txt')
+    f = open(tm_path)
 
     for line in f:
         if len(request_num) < request_n:
@@ -237,7 +241,7 @@ class Env:
 
         event.set()
 
-        time.sleep(55)  # wait for monitor ture value
+        time.sleep(monitor_period-5)  # wait for monitor ture value
 
         response_time_list = []
 
@@ -391,7 +395,7 @@ def send_request(stage, request_num):
             # print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp) % 60) == 0 and timestamp != 0:  # and timestamp<(simulation_time)
+            if ((timestamp) % monitor_period) == 0 and timestamp != 0:  # and timestamp<(simulation_time)
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
@@ -431,7 +435,7 @@ def agent_threshold(event, service_name):
     state = env.reset()
     while True:
         print(timestamp)
-        if timestamp == 55:
+        if timestamp == (monitor_period-5):
             # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
             state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
             response_time_list = []
@@ -448,7 +452,7 @@ def agent_threshold(event, service_name):
         if timestamp == 0:
             done = False
         event_timestamp_control.wait()
-        if (((timestamp) % 60) == 0) and (not done) and timestamp!=0:
+        if (((timestamp) % monitor_period) == 0) and (not done) and timestamp!=0:
             if timestamp == (simulation_time):
                 done = True
             else:

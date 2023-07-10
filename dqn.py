@@ -27,7 +27,7 @@ ip1 = "192.168.99.129"  # app_mn2
 data_rate = 20      # if not use_tm
 
 use_tm = 0          # if use_tm
-tm_path = 'request/request14.txt'
+tm_path = 'request/request20.txt'
 result_dir = "./dqn_result/result1/evaluate4/"
 
 ## initial
