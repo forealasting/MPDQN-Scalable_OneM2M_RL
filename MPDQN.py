@@ -24,9 +24,9 @@ ip1 = "192.168.99.129"  # app_mn2
 
 # request rate r
 data_rate = 30      # if not use_tm
-use_tm = 0          # if use_tm
+use_tm = 1          # if use_tm
 tm_path = 'request/request20.txt'  # traffic path
-result_dir = "./mpdqn_result/result8/evaluate8/"
+result_dir = "./mpdqn_result/result10/"
 
 ## initial
 request_num = []
@@ -37,12 +37,12 @@ monitor_period = 60
 simulation_time = 3600  #
 request_n = simulation_time + monitor_period  # for last step
 # initial mn1 replica , initial mn2 replica, initial mn1 cpus, initial mn2 cpus
-ini_replica1, ini_replica2, ini_cpus1, ini_cpus2 = 3, 1, 0.5, 1
+ini_replica1, ini_cpus1, ini_replica2, ini_cpus2 = 1, 1, 1, 1
 
 
 ## manual action for evaluation
 ## if training : Need modify manual_action to 0
-manual_action = 1
+manual_action = 0
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -70,23 +70,24 @@ error_rate = 0.2  # 0.2
 
 total_episodes = 3   # Training_episodes
 
-if_test = True
+if_test = False
 if if_test:
     total_episodes = 1  # Testing_episodes
 
 multipass = True  # False : PDQN  / Ture: MPDQN
 
+# totoal step = episode per step * episode; ex : 60 * 16 = 960
 # Exploration parameters
-epsilon_steps = 840  # episode per step
+epsilon_steps = 840  #
 epsilon_initial = 1   #
 epsilon_final = 0.01  # 0.01
 
 # Learning rate
-learning_rate_actor_param = 0.001
-learning_rate_actor = 0.01
+learning_rate_actor_param = 0.0001  # actor # 0.001
+learning_rate_actor = 0.001         # critic # 0.01
 # Target Learning rate
-tau_actor_param = 0.01
-tau_actor = 0.1 # 0.1
+tau_actor_param = 0.001    # actor  # 0.01
+tau_actor = 0.01           # critic # 0.1
 
 gamma = 0.9                 # Discounting rate
 replay_memory_size = 960  # Replay memory
@@ -274,7 +275,7 @@ class Env:
             action_replica = 2  # replica  idx
             action_cpus = 0.5
         if self.service_name == 'app_mn2' and manual_action:
-            action_replica = 1  # replica  idx
+            action_replica = 0  # replica  idx
             action_cpus = 1
 
         self.replica = action_replica + 1  # 0 1 2 (index)-> 1 2 3 (replica)
@@ -453,7 +454,7 @@ def post_url(url, rate):
             # if response != "201":
             #     print(response)
 
-def reset(r1, r2, c1, c2):
+def reset(r1, c1, r2, c2):
     print("reset envronment...")
     cmd_list = [
         "sudo docker-machine ssh default docker service update --replicas 0 app_mn1",
@@ -478,7 +479,7 @@ def send_request(request_num, total_episodes):
         print("episode: ", episode+1)
         print("reset envronment")
         reset_complete = 0
-        reset(ini_replica1, ini_replica2, ini_cpus1, ini_cpus2)  # reset Environment
+        reset(ini_replica1, ini_cpus1,  ini_replica2, ini_cpus2)  # reset Environment
         time.sleep(70)
         print("reset envronment complete")
         reset_complete = 1

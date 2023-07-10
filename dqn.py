@@ -35,9 +35,11 @@ request_num = []
 # timestamp    : 0, 1, 2, 31, ..., 61, ..., 3601
 # learning step:          0,  ..., 1,     , 120
 #
-simulation_time = 3600  # 300 s  # 0 ~ 3601:  3600
-request_n = simulation_time + 60
 
+monitor_period = 60
+simulation_time = 3600  #
+request_n = simulation_time + monitor_period  # for last step
+ini_replica1, ini_cpus1, ini_replica2, ini_cpus2 = 1, 1, 1, 1
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
 reset_complete = 0
@@ -285,7 +287,7 @@ class Env:
         event.set()
 
         response_time_list = []
-        time.sleep(55)
+        time.sleep(monitor_period-5)
         for i in range(5):
             time.sleep(1)
             response_time_list.append(self.get_response_time())
@@ -312,10 +314,15 @@ class Env:
         #     c_perf = math.exp(tmp_d)
         #
         # Cost 2
-        B = 10
-        target = t_max + 2 * math.log(0.9)
-        c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max),
-                          0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
+        # B = 10
+        # target = t_max + 2 * math.log(0.9)
+        # c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max),
+        #                   0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
+        # Cost 3
+        #
+        B = 0.27
+        c_perf = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / 20) - 0.5)
+
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
         # k, u, c # r
@@ -501,7 +508,7 @@ class DQNAgent:
             done = False
             losses = []
             while True:
-                if timestamp == 55:
+                if timestamp == (monitor_period-5):
                     response_time_list = []
                     state[1] = (self.env.get_cpu_utilization_from_data() / 100 / self.env.cpus)
                     for i in range(5):
@@ -523,7 +530,7 @@ class DQNAgent:
                 if timestamp == 0:
                     done = False
                 event_timestamp_Ccontrol.wait()
-                if (((timestamp) % 60) == 0) and (not done) and timestamp!=0:
+                if (((timestamp) % monitor_period) == 0) and (not done) and timestamp!=0:
                     action = self.select_action(state)
                     if timestamp == (simulation_time):
                         done = True
@@ -746,7 +753,7 @@ def post_url(url, rate):
             #     print(response)
 
 # reset Environment
-def reset():
+def reset(r1, c1, r2, c2):
     cmd_list = [
         "sudo docker-machine ssh default docker service update --replicas 0 app_mn1",
         "sudo docker-machine ssh default docker service update --replicas 0 app_mn2",
@@ -771,7 +778,7 @@ def send_request(request_num, total_episodes):
         print("episode: ", episode+1)
         print("reset envronment")
         reset_complete = 0
-        reset()  # reset Environment
+        reset(ini_replica1, ini_cpus1, ini_replica2, ini_cpus2)  # reset Environment
         time.sleep(70)
         print("reset envronment complete")
         reset_complete = 1
@@ -780,7 +787,7 @@ def send_request(request_num, total_episodes):
             # print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
-            if ((timestamp) % 60) == 0 and timestamp!=0 :  # every 60s scaling
+            if ((timestamp) % monitor_period) == 0 and timestamp!=0 :  # every 60s scaling
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
@@ -825,7 +832,7 @@ def test(episodes, event, env):
         done = False
         while True:
             print(timestamp)
-            if timestamp == 55:
+            if timestamp == (monitor_period-5):
                 state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
                 response_time_list = []
                 for i in range(5):
@@ -846,7 +853,7 @@ def test(episodes, event, env):
             if timestamp == 0:
                 done = False
             event_timestamp_Ccontrol.wait()
-            if (((timestamp) % 60) == 0) and (not done) and timestamp != 0:
+            if (((timestamp) % monitor_period) == 0) and (not done) and timestamp != 0:
                 actions = [0, 1, 2, 3, 4]  # action index
                 if state[0] == 1:
                     actions.remove(0)
@@ -909,4 +916,3 @@ t2.join()
 t3.join()
 t4.join()
 t5.join()
-

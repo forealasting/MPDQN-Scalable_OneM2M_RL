@@ -175,7 +175,7 @@ class PDQNAgent:
         # self.action_range = (self.action_max-self.action_min).detach()
         # print(np.array([1.], dtype=np.float32) for i in range(1, self.num_actions + 1))
         self.action_parameter_max_numpy = np.concatenate([np.array([1.], dtype=np.float32) for i in range(1, self.num_actions+1)]).ravel()  # 1 : para max
-        self.action_parameter_min_numpy = np.concatenate([np.array([0.5], dtype=np.float32) for i in range(1, self.num_actions+1)]).ravel()  # 0 : para min
+        self.action_parameter_min_numpy = np.concatenate([np.array([0.8], dtype=np.float32) for i in range(1, self.num_actions+1)]).ravel()  # 0.5 : para min
         self.action_parameter_range_numpy = (self.action_parameter_max_numpy - self.action_parameter_min_numpy)
         self.action_parameter_max = torch.from_numpy(self.action_parameter_max_numpy).float().to(device)
         self.action_parameter_min = torch.from_numpy(self.action_parameter_min_numpy).float().to(device)
@@ -281,10 +281,10 @@ class PDQNAgent:
                 Q_a = Q_a.detach().cpu().data.numpy()
                 action = np.argmax(Q_a)
 
-                # scale action from [0, 1] to [0.5, 1]
+                # scale action from [0, 1] to [0.8, 1]
                 output_min = 0  # sigmoid min
                 output_max = 1  # sigmoid max
-                action_min = 0.5  # ACTION SPACE min
+                action_min = 0.8  # ACTION SPACE min   # 0.5
                 action_max = 1  # ACTION SPACE max
                 all_action_parameters = ((all_action_parameters - output_min) * (action_max - action_min) / (
                             output_max - output_min)) + action_min

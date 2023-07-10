@@ -21,7 +21,7 @@ if if_evaluation:
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline/database4"
-tmp_dir = "mpdqn_result/result8/evaluate3/"
+tmp_dir = "mpdqn_result/result8/evaluate7/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -66,9 +66,8 @@ def parse(p):
                              json.loads("[" + match.group(4) + "]"), float(match.group(5)), float(match.group(6)),
                              float(match.group(7)), json.loads("[" + match.group(8) + "]"), match.group(9) == "True"]
                 parsed_line.append(line_data)
-                # 9 8
-                # or tmp == 121
-                if match.group(9) == "True":
+
+                if match.group(9) == "True" or tmp == step_per_episodes:
                     parsed_data.append(parsed_line)
                     tmp = 0
                     parsed_line = []
@@ -116,7 +115,9 @@ def fig_add_Cpu_utilization(x, y, y_, service_name):
         plt.plot(x, y_, color='royalblue')  # color=color
     else:
         plt.plot(x, y, color='royalblue')  # color=color # label=label
-    plt.title(service_name)
+
+    avg = sum(y) / len(y)
+    plt.title(service_name + " Avg : " + str(avg))
     plt.xlabel("step")
     plt.ylabel("Cpu_utilization")
     # plt.grid(True)
@@ -169,6 +170,7 @@ def fig_add_Resource_use(x, y, y_, service_name, dir):
     # print(len(y))
 
     avg = sum(y) / len(y)
+    avg = round(avg, 2)
     print(service_name + " Avg_Resource_use", avg)
 
     plt.title(service_name + " Avg : " + str(avg))

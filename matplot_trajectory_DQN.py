@@ -40,8 +40,9 @@ def parse(p):
         data = f.read().splitlines()
         parsed_data = []
         parsed_line = []
-
+        tmp = 0
         for line in data:
+            tmp += 1
             # parse data
             match = re.match(r"(\d+) \[(.+)\] (\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) ([-+]?\d*\.\d+) \[(.+)\] (\w+)", line)  # for DQN/Qlearning
             # match = re.match(
@@ -61,7 +62,8 @@ def parse(p):
 
                 parsed_line.append(line_data)
                 # 9 8
-                if match.group(8) == "True":
+                if match.group(8) == "True" or tmp==step_per_episodes:
+                    tmp = 0
                     parsed_data.append(parsed_line)
                     parsed_line = []
 

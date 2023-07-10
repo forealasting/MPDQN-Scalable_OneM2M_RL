@@ -12,6 +12,12 @@ import  datetime
 
 print(datetime.datetime.now())
 
+
+# Need modify ip if ip change
+ip = "192.168.99.128"  # app_mn1
+ip1 = "192.168.99.129"  # app_mn2
+
+
 # request rate r
 data_rate = 50      # if not use_tm
 use_tm = 1  # if use_tm
@@ -23,8 +29,10 @@ request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
 # learning step:   0,  ..., 1,     , 120
 
+monitor_period = 60
 simulation_time = 3600  #
-request_n = simulation_time + 60
+request_n = simulation_time + monitor_period  # for last step
+ini_replica1, ini_cpus1, ini_replica2, ini_cpus2 = 1, 1, 1, 1
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -35,10 +43,6 @@ RFID = 0  # random number for data
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_control = threading.Event()
-
-# Need modify ip if ip change
-ip = "192.168.99.124"  # app_mn1
-ip1 = "192.168.99.125"  # app_mn2
 
 
 # Parameter
@@ -353,15 +357,21 @@ def store_trajectory(service_name, step, s, a, r, r_perf, r_res, s_, done):
     data = str(step) + ' ' + str(tmp_s) + ' ' + str(a) + ' ' + str(r) + ' ' + str(r_perf) + ' ' + str(r_res) + ' ' + str(tmp_s_) + ' ' + str(done) + '\n'
     f.write(data)
 
-def reset():
-    cmd1 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn1 "
-    cmd2 = "sudo docker-machine ssh default docker service update --replicas 1 app_mn2 "
-    cmd3 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn1"
-    cmd4 = "sudo docker-machine ssh default docker service update --limit-cpu 1 app_mn2"
-    subprocess.check_output(cmd1, shell=True)
-    subprocess.check_output(cmd2, shell=True)
-    subprocess.check_output(cmd3, shell=True)
-    subprocess.check_output(cmd4, shell=True)
+def reset(r1, c1, r2, c2):
+    print("reset envronment...")
+    cmd_list = [
+        "sudo docker-machine ssh default docker service update --replicas 0 app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas 0 app_mn2",
+        "sudo docker-machine ssh default docker service update --replicas " + str(r1) + " app_mn1",
+        "sudo docker-machine ssh default docker service update --limit-cpu " + str(c1) + " app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas " + str(r2) + " app_mn2",
+        "sudo docker-machine ssh default docker service update --limit-cpu " + str(c2) + " app_mn2"
+    ]
+    def execute_command(cmd):
+        return subprocess.check_output(cmd, shell=True)
+    for cmd in cmd_list:
+        result = execute_command(cmd)
+        print(result)
 
 def send_request(stage, request_num):
     global change, send_finish, reset_complete
@@ -372,7 +382,7 @@ def send_request(stage, request_num):
         print("episode: ", episode + 1)
         print("reset envronment")
         reset_complete = 0
-        reset()  # reset Environment
+        reset(ini_replica1, ini_cpus1,  ini_replica2, ini_cpus2)  # reset Environment
         time.sleep(70)
         print("reset envronment complete")
         reset_complete = 1
