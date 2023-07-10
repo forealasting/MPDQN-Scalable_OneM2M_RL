@@ -558,7 +558,7 @@ class DQNAgent:
                             self._target_hard_update()
 
                     step += 1
-                    event_timestamp_Ccontrol.clear()
+                    # event_timestamp_Ccontrol.clear()
                     if done:
                         # print("done")
                         break

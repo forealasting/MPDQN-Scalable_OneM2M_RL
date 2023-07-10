@@ -23,10 +23,10 @@ ip1 = "192.168.99.129"  # app_mn2
 
 
 # request rate r
-data_rate = 40      # if not use_tm
-use_tm = 0          # if use_tm
-tm_path = 'request/request14.txt'  # traffic path
-result_dir = "./mpdqn_result/result8/evaluate2/"
+data_rate = 50      # if not use_tm
+use_tm = 1          # if use_tm
+tm_path = 'request/request20.txt'  # traffic path
+result_dir = "./mpdqn_result/result9/evaluate/"
 
 ## initial
 request_num = []
@@ -42,7 +42,7 @@ ini_replica1, ini_replica2, ini_cpus1, ini_cpus2 = 1, 1, 1, 1
 
 ## manual action for evaluation
 ## if training : Need modify manual_action to 0
-manual_action = 1
+manual_action = 0
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -56,8 +56,8 @@ event_timestamp_Ccontrol = threading.Event()
 
 
 # Parameter
-w_pref = 0.8
-w_res = 0.2
+w_pref = 0.5   # 0.6
+w_res = 0.5    # 0.2
 Tmax_mn1 = 20
 Tmax_mn2 = 20
 Tupper = 50
@@ -68,7 +68,7 @@ error_rate = 0.2  # 0.2
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 
-total_episodes = 16   # Training_episodes
+total_episodes = 3   # Training_episodes
 
 if_test = True
 if if_test:
@@ -270,11 +270,11 @@ class Env:
         action_replica = action[0]
         action_cpus = action[1][action_replica][0]
         # manual_action
-        if self.service_name == 'app_mn2' and manual_action:
-            action_replica = 0  # replica  idx
-            action_cpus = 1
         if self.service_name == 'app_mn1' and manual_action:
-            action_replica = 0  # replica  idx
+            action_replica = 1  # replica  idx
+            action_cpus = 1
+        if self.service_name == 'app_mn2' and manual_action:
+            action_replica = 1  # replica  idx
             action_cpus = 1
 
         self.replica = action_replica + 1  # 0 1 2 (index)-> 1 2 3 (replica)

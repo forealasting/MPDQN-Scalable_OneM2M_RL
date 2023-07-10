@@ -459,7 +459,7 @@ def agent_threshold(event, service_name):
 
             state = next_state
             step += 1
-            event_timestamp_control.clear()
+            # event_timestamp_control.clear()
         if done:
             break
 
