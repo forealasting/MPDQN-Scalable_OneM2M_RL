@@ -23,10 +23,10 @@ ip1 = "192.168.99.129"  # app_mn2
 
 
 # request rate r
-data_rate = 50      # if not use_tm
-use_tm = 1          # if use_tm
+data_rate = 30      # if not use_tm
+use_tm = 0          # if use_tm
 tm_path = 'request/request20.txt'  # traffic path
-result_dir = "./mpdqn_result/result9/evaluate/"
+result_dir = "./mpdqn_result/result8/evaluate8/"
 
 ## initial
 request_num = []
@@ -37,12 +37,12 @@ monitor_period = 60
 simulation_time = 3600  #
 request_n = simulation_time + monitor_period  # for last step
 # initial mn1 replica , initial mn2 replica, initial mn1 cpus, initial mn2 cpus
-ini_replica1, ini_replica2, ini_cpus1, ini_cpus2 = 1, 1, 1, 1
+ini_replica1, ini_replica2, ini_cpus1, ini_cpus2 = 3, 1, 0.5, 1
 
 
 ## manual action for evaluation
 ## if training : Need modify manual_action to 0
-manual_action = 0
+manual_action = 1
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -56,7 +56,7 @@ event_timestamp_Ccontrol = threading.Event()
 
 
 # Parameter
-w_pref = 0.5   # 0.6
+w_pref = 0.5   # 0.8
 w_res = 0.5    # 0.2
 Tmax_mn1 = 20
 Tmax_mn2 = 20
@@ -271,8 +271,8 @@ class Env:
         action_cpus = action[1][action_replica][0]
         # manual_action
         if self.service_name == 'app_mn1' and manual_action:
-            action_replica = 1  # replica  idx
-            action_cpus = 1
+            action_replica = 2  # replica  idx
+            action_cpus = 0.5
         if self.service_name == 'app_mn2' and manual_action:
             action_replica = 1  # replica  idx
             action_cpus = 1
@@ -459,15 +459,15 @@ def reset(r1, r2, c1, c2):
         "sudo docker-machine ssh default docker service update --replicas 0 app_mn1",
         "sudo docker-machine ssh default docker service update --replicas 0 app_mn2",
         "sudo docker-machine ssh default docker service update --replicas " + str(r1) + " app_mn1",
-        "sudo docker-machine ssh default docker service update --replicas " + str(r2) + " app_mn2",
         "sudo docker-machine ssh default docker service update --limit-cpu " + str(c1) + " app_mn1",
+        "sudo docker-machine ssh default docker service update --replicas " + str(r2) + " app_mn2",
         "sudo docker-machine ssh default docker service update --limit-cpu " + str(c2) + " app_mn2"
     ]
     def execute_command(cmd):
         return subprocess.check_output(cmd, shell=True)
     for cmd in cmd_list:
         result = execute_command(cmd)
-        # print(result)
+        print(result)
 
 def send_request(request_num, total_episodes):
     global change, send_finish, reset_complete
