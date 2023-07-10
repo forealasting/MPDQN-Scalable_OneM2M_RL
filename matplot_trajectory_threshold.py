@@ -168,7 +168,7 @@ def fig_add_Resource_use(x, y, y_, service_name, dir):
     plt.xlabel("step")
     plt.ylabel("Resource_use")
     plt.grid(True)
-    plt.xlim(0, len(y))
+    plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 3)
     plt.savefig(dir + service_name + "_Resource_use.png", dpi=300)
     plt.tight_layout()
