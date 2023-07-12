@@ -563,7 +563,7 @@ class DQNAgent:
                             self._target_hard_update()
 
                     step += 1
-                    # event_timestamp_Ccontrol.clear()
+                    event_timestamp_Ccontrol.clear()
                     if done:
                         # print("done")
                         break
@@ -786,6 +786,7 @@ def send_request(request_num, total_episodes):
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
             if ((timestamp) % monitor_period) == 0 and timestamp!=0 :  # every 60s scaling
+                event_timestamp_Ccontrol.set()
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
@@ -800,7 +801,7 @@ def send_request(request_num, total_episodes):
                 print("error")
                 error += 1
             timestamp += 1
-            event_timestamp_Ccontrol.set()
+
 
     send_finish = 1
     store_error_count(error)

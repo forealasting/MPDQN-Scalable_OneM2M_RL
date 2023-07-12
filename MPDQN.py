@@ -26,7 +26,7 @@ ip1 = "192.168.99.129"  # app_mn2
 data_rate = 30      # if not use_tm
 use_tm = 1          # if use_tm
 tm_path = 'request/request20.txt'  # traffic path
-result_dir = "./mpdqn_result/result14/"
+result_dir = "./mpdqn_result/result15/"
 
 ## initial
 request_num = []
@@ -68,7 +68,7 @@ error_rate = 0.2  # 0.2
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 
-total_episodes = 8   # Training_episodes
+total_episodes = 1   # Training_episodes
 
 if_test = False
 if if_test:
@@ -489,6 +489,7 @@ def send_request(request_num, total_episodes):
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
             if ((timestamp) % monitor_period) == 0 and timestamp!=0 :  # every 60s scaling
+                event_timestamp_Ccontrol.set()
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
@@ -503,7 +504,7 @@ def send_request(request_num, total_episodes):
                 print("error")
                 error += 1
             timestamp += 1
-            event_timestamp_Ccontrol.set()
+
 
     send_finish = 1
     store_error_count(error)
@@ -625,7 +626,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                     agent.epsilon_decay()
 
                 step += 1
-                # event_timestamp_Ccontrol.clear()
+                event_timestamp_Ccontrol.clear()
                 if done:
                     break
     if not if_test:
