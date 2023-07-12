@@ -51,6 +51,7 @@ for i in range(len(k_alloc)):
 ax.set_xlabel('cpus allocation')
 ax.set_ylabel('c_res')
 ax.legend()
+plt.savefig("cres_function.png", dpi=300)
 plt.show()
 # plt.plot(x, y)
 # plt.xlabel('resouce use')

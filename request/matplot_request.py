@@ -34,8 +34,9 @@ def fig_add(x, y):
     plt.xlabel("timestamp(s)")
     plt.ylabel("Data rate(requests/s) ")
     plt.grid(True)
-    plt.ylim(0, 100)
+
     plt.xlim(0, 3660)
+    plt.ylim(0, max(y) + 20)
     # plt.legend()
     plt.savefig("workload2.png", dpi=300)
     plt.show()
@@ -47,7 +48,7 @@ def fig_add1(x, y):
     plt.ylabel("Data rate(requests/s) ")
     plt.grid(True)
     plt.xlim(0, 60)
-    plt.ylim(0, 120)
+    plt.ylim(0, max(y)+20)
     plt.savefig("workload2_.png", dpi=300)
     plt.show()
 
@@ -66,7 +67,7 @@ for p in path_list:
     ### plot delay
     fig_add(x, y)
     fig_add1(x_, y_)
-    print(y_)
+    # print(y_)
 
 
 

@@ -26,7 +26,7 @@ ip1 = "192.168.99.129"  # app_mn2
 data_rate = 30      # if not use_tm
 use_tm = 1          # if use_tm
 tm_path = 'request/request20.txt'  # traffic path
-result_dir = "./mpdqn_result/result12/"
+result_dir = "./mpdqn_result/result14/"
 
 ## initial
 request_num = []
@@ -56,10 +56,10 @@ event_timestamp_Ccontrol = threading.Event()
 
 
 # Parameter
-w_pref = 0.8   # 0.8
-w_res = 0.2    # 0.2
+w_pref = 0.5   # 0.8
+w_res = 0.5    # 0.2
 Tmax_mn1 = 20
-Tmax_mn2 = 20
+Tmax_mn2 = 10
 T_upper = 50
 error_rate = 0.2  # 0.2
 ## Learning parameter
@@ -68,7 +68,7 @@ error_rate = 0.2  # 0.2
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 
-total_episodes = 3   # Training_episodes
+total_episodes = 8   # Training_episodes
 
 if_test = False
 if if_test:
