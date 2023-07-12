@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 simulation_time = 3660  # 300 s
 
-path1 = "request20.txt"
+path1 = "request22.txt"
 
 path_list = [path1]
 
@@ -47,7 +47,7 @@ def fig_add1(x, y):
     plt.ylabel("Data rate(requests/s) ")
     plt.grid(True)
     plt.xlim(0, 60)
-    plt.ylim(0, 100)
+    plt.ylim(0, 120)
     plt.savefig("workload2_.png", dpi=300)
     plt.show()
 

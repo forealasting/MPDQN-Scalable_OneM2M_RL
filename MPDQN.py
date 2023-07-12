@@ -26,7 +26,7 @@ ip1 = "192.168.99.129"  # app_mn2
 data_rate = 30      # if not use_tm
 use_tm = 1          # if use_tm
 tm_path = 'request/request20.txt'  # traffic path
-result_dir = "./mpdqn_result/result10/"
+result_dir = "./mpdqn_result/result12/"
 
 ## initial
 request_num = []
@@ -56,8 +56,8 @@ event_timestamp_Ccontrol = threading.Event()
 
 
 # Parameter
-w_pref = 0.5   # 0.8
-w_res = 0.5    # 0.2
+w_pref = 0.8   # 0.8
+w_res = 0.2    # 0.2
 Tmax_mn1 = 20
 Tmax_mn2 = 20
 T_upper = 50
@@ -78,7 +78,7 @@ multipass = True  # False : PDQN  / Ture: MPDQN
 
 # totoal step = episode per step * episode; ex : 60 * 16 = 960
 # Exploration parameters
-epsilon_steps = 840  #
+epsilon_steps = 360  #
 epsilon_initial = 1   #
 epsilon_final = 0.01  # 0.01
 
@@ -89,7 +89,7 @@ learning_rate_actor = 0.001         # critic # 0.01
 tau_actor_param = 0.001    # actor  # 0.01
 tau_actor = 0.01           # critic # 0.1
 
-gamma = 0.9                 # Discounting rate
+gamma = 0.9               # Discounting rate
 replay_memory_size = 960  # Replay memory
 batch_size = 16
 initial_memory_threshold = 16  # Number of transitions required to start learning
@@ -625,7 +625,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                     agent.epsilon_decay()
 
                 step += 1
-                event_timestamp_Ccontrol.clear()
+                # event_timestamp_Ccontrol.clear()
                 if done:
                     break
     if not if_test:

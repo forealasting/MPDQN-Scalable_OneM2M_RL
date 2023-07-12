@@ -522,11 +522,9 @@ class DQNAgent:
                     break
             state = np.array(state, dtype=np.float32)
 
-            event_timestamp_Ccontrol.wait()
+
             print("service name:", self.env.service_name, " episode:", episode+1)  #
             while True:
-
-
                 if timestamp == 0:
                     done = False
                 event_timestamp_Ccontrol.wait()

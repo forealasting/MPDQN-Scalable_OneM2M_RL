@@ -465,6 +465,8 @@ def agent_threshold(event, service_name):
             Rt = mean_response_time
             state[3] = Rt
             break
+    print("service name:", env.service_name, "initial state:", state)
+
     # action: +1 scale out -1 scale in
     while True:
         if timestamp == 0:

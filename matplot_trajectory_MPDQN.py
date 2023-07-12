@@ -21,7 +21,7 @@ if if_evaluation:
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline/database4"
-tmp_dir = "mpdqn_result/result8/evaluate7/"
+tmp_dir = "mpdqn_result/result10/evaluate/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -66,8 +66,8 @@ def parse(p):
                              json.loads("[" + match.group(4) + "]"), float(match.group(5)), float(match.group(6)),
                              float(match.group(7)), json.loads("[" + match.group(8) + "]"), match.group(9) == "True"]
                 parsed_line.append(line_data)
-
-                if match.group(9) == "True" or tmp == step_per_episodes:
+                # tmp == step_per_episodes
+                if match.group(9) == "True":
                     parsed_data.append(parsed_line)
                     tmp = 0
                     parsed_line = []

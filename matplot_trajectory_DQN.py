@@ -80,7 +80,7 @@ def fig_add_Cpus(x, y, service_name):
     #　plt.xlabel("step")
     plt.xlabel("step")
     plt.ylabel("Cpus")
-    plt.grid(True)
+    #plt.grid(True)
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 1.1)
@@ -95,7 +95,7 @@ def fig_add_Replicas(x, y, service_name):
     plt.title(service_name)
     plt.xlabel("step")
     plt.ylabel("Replicas")
-    plt.grid(True)
+    #plt.grid(True)
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 4)
@@ -113,7 +113,7 @@ def fig_add_Cpu_utilization(x, y, y_, service_name):
     plt.title(service_name)
     plt.xlabel("step")
     plt.ylabel("Cpu_utilization")
-    plt.grid(True)
+    #plt.grid(True)
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 100)
     plt.savefig(tmp_dir + service_name + "_Cpu_utilization.png", dpi=300)
@@ -142,7 +142,7 @@ def fig_add_response_times(x, y, y_, service_name):
     R = len(list(result2)) / len(y)
     print("Rmax violation: ", R)
 
-    plt.grid(True)
+    #plt.grid(True)
     plt.axhline(y=Rmax_mn1, color='r', linestyle='--')
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 100)
@@ -168,7 +168,7 @@ def fig_add_Resource_use(x, y, y_, service_name, dir):
     plt.title(service_name + " Avg : " + str(avg))
     plt.xlabel("step")
     plt.ylabel("Resource_use")
-    plt.grid(True)
+    #plt.grid(True)
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 3)
     plt.savefig(dir + service_name + "_Resource_use.png", dpi=300)
@@ -185,7 +185,7 @@ def fig_add_reward(x, y, y_, service_name):
     plt.xlabel("step")
     plt.ylabel("Reward")
 
-    plt.grid(True)
+    #plt.grid(True)
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(-0.6, 0)
