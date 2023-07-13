@@ -483,11 +483,11 @@ def post_url(url, rate, timestamp):
             results.append(executor.submit(post, url))
             time.sleep(1/rate)  # send requests every 1 / rate s
 
-        for result in as_completed(results):
-            response, response_time = result.result()
-            timestamp_list.append(timestamp)
-            response_list.append(response)
-            response_time_list.append(response_time)
+        # for result in as_completed(results):
+        #     response, response_time = result.result()
+        #     timestamp_list.append(timestamp)
+        #     response_list.append(response)
+        #     response_time_list.append(response_time)
             # print(type(response.status_code), response_time)
             # if response != "201":
             #     print(response)
@@ -549,7 +549,7 @@ def send_request(request_num, total_episodes):
 
     send_finish = 1
     store_error_count(error)
-    store_request(response_list, response_time_list, timestamp_list)
+    # store_request(response_list, response_time_list, timestamp_list)
 
 
 
