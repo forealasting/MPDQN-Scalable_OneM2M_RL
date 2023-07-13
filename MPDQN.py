@@ -23,10 +23,10 @@ ip1 = "192.168.99.129"  # app_mn2
 
 
 # request rate r
-data_rate = 30      # if not use_tm
-use_tm = 1          # if use_tm
+data_rate = 50      # if not use_tm
+use_tm = 0          # if use_tm
 tm_path = 'request/request20.txt'  # traffic path
-result_dir = "./mpdqn_result/result16/"
+result_dir = "./mpdqn_result/result18/evaluate2/"
 
 ## initial
 request_num = []
@@ -42,7 +42,7 @@ ini_replica1, ini_cpus1, ini_replica2, ini_cpus2 = 1, 1, 1, 1
 
 ## manual action for evaluation
 ## if training : Need modify manual_action to 0
-manual_action = 0
+manual_action = 1
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -68,9 +68,9 @@ error_rate = 0.2  # 0.2
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 
-total_episodes = 16   # Training_episodes
+total_episodes = 1   # Training_episodes
 
-if_test = False
+if_test = True
 if if_test:
     total_episodes = 1  # Testing_episodes
 
@@ -272,8 +272,8 @@ class Env:
         action_cpus = action[1][action_replica][0]
         # manual_action
         if self.service_name == 'app_mn1' and manual_action:
-            action_replica = 2  # replica  idx
-            action_cpus = 0.5
+            action_replica = 0  # replica  idx
+            action_cpus = 1
         if self.service_name == 'app_mn2' and manual_action:
             action_replica = 0  # replica  idx
             action_cpus = 1
@@ -296,15 +296,18 @@ class Env:
 
         event.set()
 
-        time.sleep(monitor_period-5)  # wait for monitor ture value
+        # time.sleep(monitor_period-6)  # wait for monitor ture value
+        while True:
+            if ((timestamp+6)%monitor_period == 0):
+                break
 
         response_time_list = []
         # self.cpu_utilization = self.get_cpu_utilization()
         self.cpu_utilization = self.get_cpu_utilization_from_data()
 
         for i in range(5):
-            time.sleep(1)
             response_time_list.append(self.get_response_time())
+            time.sleep(1)
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
 
@@ -330,17 +333,37 @@ class Env:
 
         # Cost 3
         #
+        # B = np.log(1+0.5)/((T_upper-t_max)/t_max)
+        # c_perf = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / t_max) - 0.5)
+
+        # Cost 4
+        # delay cost
         B = np.log(1+0.5)/((T_upper-t_max)/t_max)
-        c_perf = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / t_max) - 0.5)
+        c_delay = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / t_max) - 0.5)
 
+        # cpu_utilization cost
+        relative_cpu_utilization = self.cpu_utilization/100/self.cpus
+        if relative_cpu_utilization > 0.8:
+            x1 = 0.8
+            x2 = 1.0
+            y1 = t_max
+            y2 = T_upper
 
+            clip_relative_cpu_utilization = min(relative_cpu_utilization, 1)
+            map_utilization = (clip_relative_cpu_utilization - x1) * ((y2 - y1) / (x2 - x1)) + t_max
+            c_utilization = np.exp(B * (map_utilization - t_max) / t_max) - 0.5
+        else:
+            c_utilization = 0
+        c_perf = max(c_delay, c_utilization)
+
+        # resource cost
         c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
         next_state = []
         # # k, u, c # r
 
         # u = self.discretize_cpu_value(self.cpu_utilization)
         next_state.append(self.replica)
-        next_state.append(self.cpu_utilization/100/self.cpus)
+        next_state.append(relative_cpu_utilization)
         next_state.append(self.cpus)
         next_state.append(Rt)
         # next_state.append(request_num[timestamp])
@@ -408,6 +431,14 @@ def store_error_count(error):
     data = str(error) + '\n'
     f.write(data)
 
+def store_request(response_list, response_time_list, timestamp_list):
+    # Write the string to a text file
+    path = result_dir + "request.txt"
+    data = ""
+    f = open(path, 'a')
+    for i in range(len(response_list)):
+        data += str(response_list[i]) + " " + str(response_time_list[i]) + " " + str(timestamp_list[i]) + '\n'
+    f.write(data)
 
 def post(url):
     RFID = random.randint(0, 1000000)
@@ -438,8 +469,12 @@ def post(url):
 
     return response, rt
 
+response_list = []
+response_time_list = []
+timestamp_list = []
+def post_url(url, rate, timestamp):
+    global response_list, response_time_list, timestamp_list
 
-def post_url(url, rate):
 
     with ThreadPoolExecutor(max_workers=rate) as executor:
 
@@ -450,9 +485,13 @@ def post_url(url, rate):
 
         for result in as_completed(results):
             response, response_time = result.result()
-            # # print(type(response.status_code), response_time)
+            timestamp_list.append(timestamp)
+            response_list.append(response)
+            response_time_list.append(response_time)
+            # print(type(response.status_code), response_time)
             # if response != "201":
             #     print(response)
+
 
 def reset(r1, c1, r2, c2):
     print("reset envronment...")
@@ -473,7 +512,9 @@ def reset(r1, c1, r2, c2):
 def send_request(request_num, total_episodes):
     global change, send_finish, reset_complete
     global timestamp, use_tm, RFID
+    global response_list, response_time_list, timestamp_list
     error = 0
+
     for episode in range(total_episodes):
         timestamp = 0
         print("episode: ", episode+1)
@@ -485,10 +526,11 @@ def send_request(request_num, total_episodes):
         reset_complete = 1
         send_finish = 0
         for i in request_num:
-            # print('timestamp: ', timestamp)
+            print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
             if ((timestamp) % monitor_period) == 0 and timestamp!=0 :  # every 60s scaling
+                event_timestamp_Ccontrol.set()
                 print("wait mn1 mn2 step and service scaling ...")
                 event_mn1.wait()  # if flag == false : wait, else if flag == True: continue
                 event_mn2.wait()
@@ -498,15 +540,16 @@ def send_request(request_num, total_episodes):
             # exp = np.random.exponential(scale=1 / i, size=i)
             url = "http://" + ip + ":666/~/mn-cse/mn-name/AE1/"
             try:
-                post_url(url, i)
+                post_url(url, i, timestamp)
             except:
                 print("error")
                 error += 1
             timestamp += 1
-            event_timestamp_Ccontrol.set()
+
 
     send_finish = 1
     store_error_count(error)
+    store_request(response_list, response_time_list, timestamp_list)
 
 
 
@@ -569,14 +612,14 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
         done = False
 
         while True:
-            print(timestamp)
-            if timestamp == (monitor_period-5):
+            # print(timestamp)
+            if timestamp == (monitor_period-6):
                 # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
                 state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
                 response_time_list = []
                 for i in range(5):
-                    time.sleep(1)
                     response_time_list.append(env.get_response_time())
+                    time.sleep(1)
                 mean_response_time = statistics.mean(response_time_list)
                 mean_response_time = mean_response_time * 1000
                 Rt = mean_response_time
@@ -625,7 +668,7 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
                     agent.epsilon_decay()
 
                 step += 1
-                event_timestamp_Ccontrol.clear()
+                # event_timestamp_Ccontrol.clear()
                 if done:
                     break
     if not if_test:
@@ -650,7 +693,6 @@ t2.start()
 t3.start()
 t4.start()
 t5.start()
-
 
 t1.join()
 t2.join()
