@@ -21,7 +21,7 @@ if if_evaluation:
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline/database4"
-tmp_dir = "mpdqn_result/result10/evaluate/"
+tmp_dir = "mpdqn_result/result4/evaluate14/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -66,8 +66,8 @@ def parse(p):
                              json.loads("[" + match.group(4) + "]"), float(match.group(5)), float(match.group(6)),
                              float(match.group(7)), json.loads("[" + match.group(8) + "]"), match.group(9) == "True"]
                 parsed_line.append(line_data)
-                # tmp == step_per_episodes
-                if match.group(9) == "True":
+
+                if match.group(9) == "True" or tmp == step_per_episodes:
                     parsed_data.append(parsed_line)
                     tmp = 0
                     parsed_line = []
@@ -232,8 +232,8 @@ def parse_episods_data(episods_data, service_name):
             replicas.append(parsed_line[1][0])
             cpus.append(parsed_line[1][2])
             cpu_u = parsed_line[1][1]*100
-            if cpu_u > 100:
-                cpu_u = 100
+            # if cpu_u > 100:
+            #     cpu_u = 100
             cpu_utilization.append(cpu_u)
             response_times.append(parsed_line[1][3])
             reward.append(parsed_line[4])  # cost = -reward
@@ -243,8 +243,8 @@ def parse_episods_data(episods_data, service_name):
                 replicas.append(parsed_line[7][0])
                 cpus.append(parsed_line[7][2])
                 cpu_u = parsed_line[7][1] * 100
-                if cpu_u > 100:
-                    cpu_u = 100
+                # if cpu_u > 100:
+                #     cpu_u = 100
                 cpu_utilization.append(cpu_u)
                 response_times.append(parsed_line[7][3])
         # episode_reward.append(sum(reward)/len(reward))

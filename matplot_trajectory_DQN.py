@@ -21,11 +21,11 @@ if if_evaluation:
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 # tmp_dir = "dqn_result/result1/evaluate/"
 # tmp_dir = "dqn_result/result2/"
-tmp_dir = "dqn_result/result2/evaluate2/"
+tmp_dir = "dqn_result/result1/evaluate2/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
-service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
+service = ["First_level_MNCSE", "Second_level_MNCSE", "app_mnae1", "app_mnae2"]
 Rmax_mn1 = 20
 Rmax_mn2 = 20
 
@@ -176,7 +176,8 @@ def fig_add_Resource_use(x, y, y_, service_name, dir):
     plt.show()
 
 def fig_add_reward(x, y, y_, service_name):
-    # x = x[:-1]
+    if if_evaluation:
+        x = x[:-1]
     plt.figure()
     plt.plot(x, y, color="red", alpha=0.2)  # color=color # label=label
     plt.plot(x, y_, color="red")  # color=color # label=label

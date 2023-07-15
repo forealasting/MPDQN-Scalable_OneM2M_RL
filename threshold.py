@@ -21,11 +21,11 @@ ip1 = "192.168.99.129"  # app_mn2
 
 # request rate r
 data_rate = 50      # if not use_tm
-use_tm = 1  # if use_tm
-
+use_tm = 0          # if use_tm
+tm_path = 'request/request23.txt'  # traffic path
 # result path
-result_dir = "./threshold_result/result2/"
-tm_path = 'request/request20.txt'  # traffic path
+result_dir = "./threshold_result/result5/"
+
 
 ## initial
 request_num = []
@@ -242,13 +242,16 @@ class Env:
 
         event.set()
 
-        time.sleep(monitor_period-5)  # wait for monitor ture value
+        # time.sleep(monitor_period-5)  # wait for monitor ture value
+        while True:
+            if ((timestamp+6)%monitor_period == 0):
+                break
 
         response_time_list = []
 
         for i in range(5):
-            time.sleep(1)
             response_time_list.append(self.get_response_time())
+            time.sleep(1)
         mean_response_time = statistics.mean(response_time_list)
         mean_response_time = mean_response_time*1000  # 0.05s -> 50ms
 
@@ -276,10 +279,31 @@ class Env:
         # c_perf = np.where(Rt <= target, np.exp(B * (Rt - t_max) / t_max), 0.9 + ((Rt - target) / (Tupper - target)) * 0.1)
         # Cost 3
         #
-        B = np.log(1+0.5)/((T_upper-t_max)/t_max)
-        c_perf = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / t_max) - 0.5)
+        # B = np.log(1+0.5)/((T_upper-t_max)/t_max)
+        # c_perf = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / t_max) - 0.5)
 
-        c_res = (self.replica*self.cpus)/3   # replica*self.cpus / Kmax
+        # Cost 4
+        # delay cost
+        B = np.log(1 + 0.5) / ((T_upper - t_max) / t_max)
+        c_delay = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / t_max) - 0.5)
+
+        # cpu_utilization cost
+        relative_cpu_utilization = self.cpu_utilization / 100 / self.cpus
+        if relative_cpu_utilization > 0.8:
+            x1 = 0.8
+            x2 = 1.0
+            y1 = t_max
+            y2 = T_upper
+
+            clip_relative_cpu_utilization = min(relative_cpu_utilization, 1)
+            map_utilization = (clip_relative_cpu_utilization - x1) * ((y2 - y1) / (x2 - x1)) + t_max
+            c_utilization = np.exp(B * (map_utilization - t_max) / t_max) - 0.5
+        else:
+            c_utilization = 0
+        c_perf = max(c_delay, c_utilization)
+
+        # resource cost
+        c_res = (self.replica * self.cpus) / 3  # replica*self.cpus / Kmax
         next_state = []
         # # k, u, c # r
 
@@ -382,8 +406,8 @@ def post_url(url, rate):
             results.append(executor.submit(post, url))
             time.sleep(1/rate)  # send requests every 1 / rate s
 
-        for result in as_completed(results):
-            response, response_time = result.result()
+        # for result in as_completed(results):
+        #     response, response_time = result.result()
             # # print(type(response.status_code), response_time)
             # if response != "201":
             #     print(response)
@@ -454,13 +478,13 @@ def agent_threshold(event, service_name):
     state = env.reset()
     while True:
         print(timestamp)
-        if timestamp == (monitor_period-5):
+        if timestamp == (monitor_period-6):
             # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
             state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
             response_time_list = []
             for i in range(5):
-                time.sleep(1)
                 response_time_list.append(env.get_response_time())
+                time.sleep(1)
             mean_response_time = statistics.mean(response_time_list)
             mean_response_time = mean_response_time * 1000
             Rt = mean_response_time

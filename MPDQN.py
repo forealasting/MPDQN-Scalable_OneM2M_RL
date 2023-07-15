@@ -18,22 +18,22 @@ print(datetime.datetime.now())
 
 # Need modify ip if ip change
 # check cmd : sudo docker-machine ls
-ip = "192.168.99.128"  # app_mn1
-ip1 = "192.168.99.129"  # app_mn2
+ip = "192.168.99.101"  # app_mn1
+ip1 = "192.168.99.102"  # app_mn2
 
 
 # request rate r
-data_rate = 50      # if not use_tm
-use_tm = 0          # if use_tm
-tm_path = 'request/request20.txt'  # traffic path
-result_dir = "./mpdqn_result/result18/evaluate2/"
+data_rate = 120      # if not use_tm
+use_tm = 1          # if use_tm
+tm_path = 'request/request24.txt'  # traffic path
+result_dir = "./mpdqn_result/result1/"
 
 ## initial
 request_num = []
 # timestamp    :  0, 1, 2, , ..., 61, ..., 3601
 # learning step:   0,  ..., 1,     , 120
 
-monitor_period = 60
+monitor_period = 60     # 60
 simulation_time = 3600  #
 request_n = simulation_time + monitor_period  # for last step
 # initial mn1 replica , initial mn2 replica, initial mn1 cpus, initial mn2 cpus
@@ -42,7 +42,7 @@ ini_replica1, ini_cpus1, ini_replica2, ini_cpus2 = 1, 1, 1, 1
 
 ## manual action for evaluation
 ## if training : Need modify manual_action to 0
-manual_action = 1
+manual_action = 0
 
 ## global variable
 change = 0   # 1 if take action / 0 if init or after taking action
@@ -54,6 +54,7 @@ event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
 
+event_monitor = threading.Event()
 
 # Parameter
 w_pref = 0.5   # 0.8
@@ -68,9 +69,9 @@ error_rate = 0.2  # 0.2
 # u (cpu utilization) : 0.0, 0.1 0.2 ...1     actual value : 0 ~ 100
 # c (used cpus) : 0.1 0.2 ... 1               actual value : same
 
-total_episodes = 1   # Training_episodes
+total_episodes = 16   # Training_episodes
 
-if_test = True
+if_test = False
 if if_test:
     total_episodes = 1  # Testing_episodes
 
@@ -295,11 +296,11 @@ class Env:
         time.sleep(30)  # wait service start
 
         event.set()
-
+        event_monitor.wait()
         # time.sleep(monitor_period-6)  # wait for monitor ture value
-        while True:
-            if ((timestamp+6)%monitor_period == 0):
-                break
+        # while True:
+        #     if ((timestamp+6)%monitor_period == 0):
+        #         break
 
         response_time_list = []
         # self.cpu_utilization = self.get_cpu_utilization()
@@ -339,6 +340,7 @@ class Env:
         # Cost 4
         # delay cost
         B = np.log(1+0.5)/((T_upper-t_max)/t_max)
+        Rt = min(Rt, T_upper)
         c_delay = np.where(Rt <= t_max, 0, np.exp(B * (Rt - t_max) / t_max) - 0.5)
 
         # cpu_utilization cost
@@ -484,10 +486,10 @@ def post_url(url, rate, timestamp):
             time.sleep(1/rate)  # send requests every 1 / rate s
 
         # for result in as_completed(results):
-        #     response, response_time = result.result()
-        #     timestamp_list.append(timestamp)
-        #     response_list.append(response)
-        #     response_time_list.append(response_time)
+            # response, response_time = result.result()
+            # timestamp_list.append(timestamp)
+            # response_list.append(response)
+            # response_time_list.append(response_time)
             # print(type(response.status_code), response_time)
             # if response != "201":
             #     print(response)
@@ -514,7 +516,11 @@ def send_request(request_num, total_episodes):
     global timestamp, use_tm, RFID
     global response_list, response_time_list, timestamp_list
     error = 0
+    # set flag to false
 
+    event_monitor.clear()
+    event_mn1.clear()
+    event_mn2.clear()
     for episode in range(total_episodes):
         timestamp = 0
         print("episode: ", episode+1)
@@ -523,12 +529,16 @@ def send_request(request_num, total_episodes):
         reset(ini_replica1, ini_cpus1,  ini_replica2, ini_cpus2)  # reset Environment
         time.sleep(70)
         print("reset envronment complete")
+
         reset_complete = 1
         send_finish = 0
         for i in request_num:
             print('timestamp: ', timestamp)
             event_mn1.clear()  # set flag to false
             event_mn2.clear()
+            if ((timestamp + 6) % monitor_period == 0):
+                event_monitor.set()
+            event_monitor.clear()
             if ((timestamp) % monitor_period) == 0 and timestamp!=0 :  # every 60s scaling
                 event_timestamp_Ccontrol.set()
                 print("wait mn1 mn2 step and service scaling ...")
@@ -610,21 +620,22 @@ def mpdqn(total_episodes, batch_size, gamma, initial_memory_threshold,
         state = env.reset()  # replica / cpu utiliation / cpus / response time
 
         done = False
-
-        while True:
-            # print(timestamp)
-            if timestamp == (monitor_period-6):
+        event_monitor.wait()
+        # time.sleep(monitor_period-6)
+        # while True:
+        #     # print(timestamp)
+        #     if timestamp == (monitor_period-6):
                 # state[1] = (env.get_cpu_utilization() / 100 / env.cpus)
-                state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
-                response_time_list = []
-                for i in range(5):
-                    response_time_list.append(env.get_response_time())
-                    time.sleep(1)
-                mean_response_time = statistics.mean(response_time_list)
-                mean_response_time = mean_response_time * 1000
-                Rt = mean_response_time
-                state[3] = Rt
-                break
+        state[1] = (env.get_cpu_utilization_from_data() / 100 / env.cpus)
+        response_time_list = []
+        for i in range(5):
+            response_time_list.append(env.get_response_time())
+            time.sleep(1)
+        mean_response_time = statistics.mean(response_time_list)
+        mean_response_time = mean_response_time * 1000
+        Rt = mean_response_time
+        state[3] = Rt
+                # break
         state = np.array(state, dtype=np.float32)
         print("service name:", env.service_name, "initial state:", state)
         print("service name:", env.service_name, " episode:", episode)
