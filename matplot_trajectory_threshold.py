@@ -25,7 +25,7 @@ tmp_dir = "threshold_result/result2/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
-service = ["First_level_mn1", "Second_level_mn2", "app_mnae1", "app_mnae2"]
+service = ["First_level_MNCSE", "Second_level_MNCSE", "app_mnae1", "app_mnae2"]
 Rmax_mn1 = 20
 Rmax_mn2 = 20
 
@@ -73,31 +73,34 @@ def parse(p):
 # Plot --------------------------------------
 
 def fig_add_Cpus(x, y, service_name):
-    plt.figure()
+    # plt.figure()
     plt.plot(x, y, color="blue")  # color=color
     plt.title(service_name)
     #　plt.xlabel("step")
-    plt.xlabel("step")
-    plt.ylabel("Cpus")
-    #plt.grid(True)
+    plt.xlabel("step", fontsize=12)
+    plt.ylabel("Cpus", fontsize=12)
+    # plt.grid(True)
 
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 1.1)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.savefig(tmp_dir + service_name + "_Cpus.png", dpi=300)
     plt.tight_layout()
     plt.show()
 
 
 def fig_add_Replicas(x, y, service_name):
-    plt.figure()
+    # plt.figure()
     plt.plot(x, y, color="green")  # color=color
     plt.title(service_name)
-    plt.xlabel("step")
-    plt.ylabel("Replicas")
-    #plt.grid(True)
-
+    plt.xlabel("step", fontsize=12)
+    plt.ylabel("Replicas", fontsize=12)
+    # plt.grid(True)
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 4)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.savefig(tmp_dir + service_name + "_Replicas.png", dpi=300)
     plt.tight_layout()
     plt.show()
@@ -109,12 +112,16 @@ def fig_add_Cpu_utilization(x, y, y_, service_name):
         plt.plot(x, y_, color='royalblue')  # color=color
     else:
         plt.plot(x, y, color='royalblue')  # color=color # label=label
-    plt.title(service_name)
-    plt.xlabel("step")
-    plt.ylabel("Cpu_utilization")
-    #plt.grid(True)
+
+    avg = sum(y) / len(y)
+    plt.title(service_name + " Avg : " + str(avg))
+    plt.xlabel("step", fontsize=12)
+    plt.ylabel("Cpu_utilization", fontsize=12)
+    # plt.grid(True)
     plt.xlim(0, total_episodes*step_per_episodes)
-    plt.ylim(0, 100)
+    plt.ylim(0, 110)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.savefig(tmp_dir + service_name + "_Cpu_utilization.png", dpi=300)
     plt.tight_layout()
     plt.show()
@@ -130,8 +137,8 @@ def fig_add_response_times(x, y, y_, service_name):
     avg = sum(y) / len(y)
 
     plt.title(service_name + " Avg : " + str(avg))
-    plt.xlabel("step")
-    plt.ylabel("Response time")
+    plt.xlabel("step", fontsize=12)
+    plt.ylabel("Response time", fontsize=12)
     if service_name == "First_level_mn1":
         Rmax = Rmax_mn1
     else:
@@ -141,10 +148,12 @@ def fig_add_response_times(x, y, y_, service_name):
     R = len(list(result2)) / len(y)
     print("Rmax violation: ", R)
 
-    #plt.grid(True)
+    # plt.grid(True)
     plt.axhline(y=Rmax_mn1, color='r', linestyle='--')
     plt.xlim(0, total_episodes*step_per_episodes)
-    plt.ylim(0, 100)
+    plt.ylim(0, 50)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.savefig(tmp_dir + service_name + "_Response_time.png", dpi=300)
     plt.tight_layout()
     plt.show()
@@ -162,36 +171,40 @@ def fig_add_Resource_use(x, y, y_, service_name, dir):
     # print(len(y))
 
     avg = sum(y) / len(y)
+    # avg = round(avg, 2)
     print(service_name + " Avg_Resource_use", avg)
 
     plt.title(service_name + " Avg : " + str(avg))
-    plt.xlabel("step")
-    plt.ylabel("Resource_use")
-    #plt.grid(True)
+    plt.xlabel("step", fontsize=12)
+    plt.ylabel("Resource_use", fontsize=12)
+    # plt.grid(True)
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(0, 3)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.savefig(dir + service_name + "_Resource_use.png", dpi=300)
     plt.tight_layout()
     plt.show()
 
 def fig_add_reward(x, y, y_, service_name):
-    x = x[:-1]
+    if if_evaluation:
+        x = x[:-1]
     plt.figure()
     plt.plot(x, y, color="red", alpha=0.2)  # color=color # label=label
     plt.plot(x, y_, color="red")  # color=color # label=label
     avg = sum(y) / len(y)
     plt.title(service_name + " Avg : " + str(avg))
-    plt.xlabel("step")
-    plt.ylabel("Reward")
+    plt.xlabel("step", fontsize=12)
+    plt.ylabel("Reward", fontsize=12)
 
-    #plt.grid(True)
-
+    # plt.grid(True)
     plt.xlim(0, total_episodes*step_per_episodes)
     plt.ylim(-0.6, 0)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.savefig(tmp_dir + service_name + "_cost.png", dpi=300)
     plt.tight_layout()
     plt.show()
-
 def moving_average(lst, move=5):
     moving_averages = []
     for i in range(len(lst)):
