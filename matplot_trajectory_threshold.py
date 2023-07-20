@@ -305,10 +305,11 @@ def parse_episods_data(episods_data, service_name):
     resource_use_ = moving_average(resource_use)
     fig_add_Cpus(step, cpus, service_name)
     fig_add_Replicas(step, replicas, service_name)
+    fig_add_Cpus_Replicas(step, cpus, replicas, service_name)
     fig_add_response_times(step, response_times, response_times_, service_name)
     fig_add_Cpu_utilization(step, cpu_utilization, cpu_utilization_, service_name)
     fig_add_Resource_use(step, resource_use, resource_use_, service_name, tmp_dir)
-    # fig_add_reward(step, reward, reward_, service_name)
+    fig_add_reward(step, reward, reward_, service_name)
 
 
 tmp_count = 0
