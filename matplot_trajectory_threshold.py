@@ -183,8 +183,8 @@ def fig_add_response_times(x, y, y_, service_name):
     avg = sum(y) / len(y)
     median = statistics.median(y)
     print("median response time", median)
-    with open(tmp_dir + 'median.txt', 'w') as file:
-        file.write("median: " + str(median))
+    with open(tmp_dir + 'median.txt', 'a') as file:
+        file.write(service_name + "_median: " + str(median) + "/n")
     plt.title(service_name + " Avg : " + str(avg))
     plt.xlabel("step", )
     plt.ylabel("Response time", )

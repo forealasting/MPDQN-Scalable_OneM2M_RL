@@ -22,7 +22,7 @@ if if_evaluation:
 # tmp_str = "result2/result_cpu" # result_1016/tm1
 #tmp_dir = "pdqn_result/result2"
 # tmp_dir = "offline/database4"
-tmp_dir = "mpdqn_result/result1/evaluate1/"
+tmp_dir = "mpdqn_result/result4/evaluate14/"
 path1 = tmp_dir + "/app_mn1_trajectory.txt"
 path2 = tmp_dir + "/app_mn2_trajectory.txt"
 
@@ -185,8 +185,8 @@ def fig_add_response_times(x, y, y_, service_name):
     avg = sum(y) / len(y)
     median = statistics.median(y)
     print("median response time", median)
-    with open(tmp_dir + 'median.txt', 'w') as file:
-        file.write("median: " + str(median))
+    with open(tmp_dir + 'median.txt', 'a') as file:
+        file.write(service_name + "_median: " + str(median) + "/n")
 
 
     plt.title(service_name + " Avg : " + str(avg))
