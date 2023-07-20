@@ -30,13 +30,11 @@ git clone https://github.com/forealasting/Scalable_OneM2M_RL.git
 sudo docker-machine ls
 ```
 ![](https://hackmd.io/_uploads/ryfbxYTPh.png)
-
 ![](https://hackmd.io/_uploads/ryJ4ltpv3.png)
 
-
 4. choose result directory and traffic 
-![](https://hackmd.io/_uploads/H1bgyzoP3.png)
-![](https://hackmd.io/_uploads/BkO-u-lt2.png)
+
+![](https://hackmd.io/_uploads/HyFUJjZ93.png)
 
 5. run code
 ```bash=

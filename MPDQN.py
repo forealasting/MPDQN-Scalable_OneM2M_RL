@@ -24,9 +24,9 @@ ip1 = "192.168.99.102"  # app_mn2
 
 # request rate r
 data_rate = 120      # if not use_tm
-use_tm = 1          # if use_tm
+use_tm = 0          # if use_tm
 tm_path = 'request/request24.txt'  # traffic path
-result_dir = "./mpdqn_result/result1/"
+result_dir = "./mpdqn_result/result120/"
 
 ## initial
 request_num = []
@@ -53,9 +53,8 @@ RFID = 0  # oneM2M resource name  (Need different)
 event_mn1 = threading.Event()
 event_mn2 = threading.Event()
 event_timestamp_Ccontrol = threading.Event()
-
 event_monitor = threading.Event()
-
+step_period = 4
 # Parameter
 w_pref = 0.5   # 0.8
 w_res = 0.5    # 0.2

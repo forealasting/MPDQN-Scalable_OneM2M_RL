@@ -4,7 +4,7 @@ import json
 import warnings
 import os
 from matplotlib import MatplotlibDeprecationWarning
-
+import matplotlib.lines as mlines
 warnings.filterwarnings('ignore', category=MatplotlibDeprecationWarning)
 # delay modify = average every x delay (x = 10, 50, 100)
 # request rate r
@@ -73,6 +73,44 @@ def parse(p):
 
 # Plot --------------------------------------
 
+def fig_add_Cpus_Replicas(x, y1, y2, service_name):
+    fig, ax2 = plt.subplots(figsize=(12, 6))  # 建立一個 Figure 和第二個軸 ax2
+    ax1 = ax2.twinx()  # 在同一個 Figure 上建立第一個軸 ax1 (共享 x 軸)
+
+    line_replicas = ax2.plot(x, y1, color="green", linestyle="-.")[0]  # 在第二個軸上繪製綠色的 Replicas 圖形
+    line_cpus = ax1.plot(x, y2, color="blue", linestyle="--")[0]  # 在第一個軸上繪製藍色的 Cpus 圖形
+
+    ax2.set_xlabel("step", fontsize=12)  # 設定 x 軸標籤
+    ax2.set_ylabel("Replicas", fontsize=12)  # 設定第二個軸的 y 軸標籤
+    ax1.set_ylabel("Cpus", fontsize=12)  # 設定第一個軸的 y 軸標籤
+
+    ax2.set_xlim(0, total_episodes * step_per_episodes)  # 設定 x 軸範圍
+    ax2.set_ylim(0, 4)  # 設定第二個軸的 y 軸範圍
+    ax1.set_ylim(0, 1.1)  # 設定第一個軸的 y 軸範圍
+
+    ax2.tick_params(axis="both", labelsize=15)
+    ax1.tick_params(axis="both", labelsize=15)
+
+    line_replicas_color = line_replicas.get_color()
+    line_replicas_style = line_replicas.get_linestyle()
+    line_cpus_color = line_cpus.get_color()
+    line_cpus_style = line_cpus.get_linestyle()
+
+    # 建立線條圖示
+    replicas_legend = mlines.Line2D([], [], color=line_replicas_color, linestyle=line_replicas_style, label='Replicas')
+    cpus_legend = mlines.Line2D([], [], color=line_cpus_color, linestyle=line_cpus_style, label='Cpus')
+
+    ax2.set_title(service_name, fontsize=12, pad=20)  # 設定圖的標題
+    # 建立圖例
+    handles = [replicas_legend, cpus_legend]
+    labels = [handle.get_label() for handle in handles]
+    fig.legend(handles, labels, loc='upper right', bbox_to_anchor=(1, 1))
+
+    plt.savefig(tmp_dir + service_name + "_Combined.png", dpi=300)
+    plt.tight_layout()
+    plt.show()
+
+
 def fig_add_Cpus(x, y, service_name):
     # plt.figure()
     plt.plot(x, y, color="blue")  # color=color
@@ -108,11 +146,14 @@ def fig_add_Replicas(x, y, service_name):
 
 
 def fig_add_Cpu_utilization(x, y, y_, service_name):
+    plt.figure(figsize=(12, 6))
     if not if_evaluation:
         plt.plot(x, y, color='royalblue', alpha=0.2)  # color=color # label=label
         plt.plot(x, y_, color='royalblue')  # color=color
+
     else:
         plt.plot(x, y, color='royalblue')  # color=color # label=label
+        plt.fill_between(x, 0, y, color='royalblue')
 
     avg = sum(y) / len(y)
     plt.title(service_name + " Avg : " + str(avg))
@@ -129,14 +170,16 @@ def fig_add_Cpu_utilization(x, y, y_, service_name):
 
 
 def fig_add_response_times(x, y, y_, service_name):
-    plt.figure()
+    plt.figure(figsize=(12, 6))
     if not if_evaluation:
         plt.plot(x, y, color="purple", alpha=0.2)  # color=color # label=label
         plt.plot(x, y_, color="purple")  # color=color # label=label
     else:
         plt.plot(x, y, color="purple")  # color=color # label=label
+        plt.fill_between(x, 0, y, color="purple")
     avg = sum(y) / len(y)
-
+    median = statistics.median(y)
+    print("median response time", median)
     plt.title(service_name + " Avg : " + str(avg))
     plt.xlabel("step", fontsize=12)
     plt.ylabel("Response time", fontsize=12)
@@ -256,6 +299,7 @@ def parse_episods_data(episods_data, service_name):
     resource_use_ = moving_average(resource_use)
     fig_add_Cpus(step, cpus, service_name)
     fig_add_Replicas(step, replicas, service_name)
+    fig_add_Cpus_Replicas(step, cpus, replicas, service_name)
     fig_add_response_times(step, response_times, response_times_, service_name)
     fig_add_Cpu_utilization(step, cpu_utilization, cpu_utilization_, service_name)
     fig_add_Resource_use(step, resource_use, resource_use_, service_name, tmp_dir)
